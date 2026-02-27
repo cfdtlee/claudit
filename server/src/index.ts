@@ -14,6 +14,7 @@ import { initProviderSync, stopProviderSync } from './services/todoSyncEngine.js
 import { closeMcpConnections } from './services/providers/mcpClient.js';
 import { handleTerminalConnection } from './services/ptyManager.js';
 import { eventBus } from './services/eventBus.js';
+import { closeDb } from './services/database.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -185,6 +186,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     stopAllJobs();
     stopProviderSync();
     closeMcpConnections();
+    closeDb();
     server.close();
     process.exit(0);
   });

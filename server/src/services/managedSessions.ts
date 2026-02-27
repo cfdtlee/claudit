@@ -1,8 +1,4 @@
-import path from 'path';
-import os from 'os';
-import { JsonStore } from './jsonStore.js';
-
-const STORE_FILE = path.join(os.homedir(), '.claude', 'claudit-sessions.json');
+import { db } from './database.js';
 
 export interface ManagedSession {
   sessionId: string;
@@ -13,14 +9,45 @@ export interface ManagedSession {
   createdAt: string;
 }
 
-interface Store {
-  sessions: ManagedSession[];
+// --- Prepared statements ---
+
+const stmtAll = db.prepare('SELECT * FROM managed_sessions');
+const stmtById = db.prepare('SELECT * FROM managed_sessions WHERE sessionId = ?');
+const stmtInsert = db.prepare(`
+  INSERT INTO managed_sessions (sessionId, projectPath, displayName, archived, pinned, createdAt)
+  VALUES (@sessionId, @projectPath, @displayName, @archived, @pinned, @createdAt)
+`);
+const stmtDelete = db.prepare('DELETE FROM managed_sessions WHERE sessionId = ?');
+const stmtUpsertArchive = db.prepare(`
+  INSERT INTO managed_sessions (sessionId, projectPath, displayName, archived, pinned, createdAt)
+  VALUES (@sessionId, '', NULL, @archived, 0, @createdAt)
+  ON CONFLICT(sessionId) DO UPDATE SET archived = @archived
+`);
+const stmtUpsertPin = db.prepare(`
+  INSERT INTO managed_sessions (sessionId, projectPath, displayName, archived, pinned, createdAt)
+  VALUES (@sessionId, '', NULL, 0, @pinned, @createdAt)
+  ON CONFLICT(sessionId) DO UPDATE SET pinned = @pinned
+`);
+const stmtRename = db.prepare('UPDATE managed_sessions SET displayName = ? WHERE sessionId = ?');
+const stmtPinned = db.prepare('SELECT sessionId FROM managed_sessions WHERE pinned = 1');
+const stmtArchived = db.prepare('SELECT sessionId FROM managed_sessions WHERE archived = 1');
+
+// --- Row mapper ---
+
+function rowToSession(row: any): ManagedSession {
+  const s: ManagedSession = {
+    sessionId: row.sessionId,
+    projectPath: row.projectPath,
+    createdAt: row.createdAt,
+  };
+  if (row.displayName != null) s.displayName = row.displayName;
+  if (row.archived === 1) s.archived = true;
+  if (row.pinned === 1) s.pinned = true;
+  return s;
 }
 
-const store = new JsonStore<Store>(STORE_FILE, { sessions: [] });
-
 export function getManagedSessions(): ManagedSession[] {
-  return store.read().sessions;
+  return stmtAll.all().map(rowToSession);
 }
 
 export function addManagedSession(sessionId: string, projectPath: string): ManagedSession {
@@ -29,66 +56,52 @@ export function addManagedSession(sessionId: string, projectPath: string): Manag
     projectPath,
     createdAt: new Date().toISOString(),
   };
-  store.update(data => { data.sessions.push(entry); });
+  stmtInsert.run({
+    sessionId,
+    projectPath,
+    displayName: null,
+    archived: 0,
+    pinned: 0,
+    createdAt: entry.createdAt,
+  });
   return entry;
 }
 
 export function renameManagedSession(sessionId: string, name: string): ManagedSession | null {
-  let result: ManagedSession | null = null;
-  store.update(data => {
-    const entry = data.sessions.find(s => s.sessionId === sessionId);
-    if (entry) {
-      entry.displayName = name;
-      result = entry;
-    }
-  });
-  return result;
+  const result = stmtRename.run(name, sessionId);
+  if (result.changes === 0) return null;
+  const row = stmtById.get(sessionId);
+  return row ? rowToSession(row) : null;
 }
 
 export function archiveManagedSession(sessionId: string, archived: boolean): void {
-  store.update(data => {
-    let entry = data.sessions.find(s => s.sessionId === sessionId);
-    if (!entry) {
-      entry = { sessionId, projectPath: '', createdAt: new Date().toISOString() };
-      data.sessions.push(entry);
-    }
-    entry.archived = archived;
+  stmtUpsertArchive.run({
+    sessionId,
+    archived: archived ? 1 : 0,
+    createdAt: new Date().toISOString(),
   });
 }
 
 export function removeManagedSession(sessionId: string): void {
-  store.update(data => {
-    data.sessions = data.sessions.filter(s => s.sessionId !== sessionId);
-  });
+  stmtDelete.run(sessionId);
 }
 
 export function pinManagedSession(sessionId: string, pinned: boolean): void {
-  store.update(data => {
-    let entry = data.sessions.find(s => s.sessionId === sessionId);
-    if (!entry) {
-      entry = { sessionId, projectPath: '', createdAt: new Date().toISOString() };
-      data.sessions.push(entry);
-    }
-    entry.pinned = pinned;
+  stmtUpsertPin.run({
+    sessionId,
+    pinned: pinned ? 1 : 0,
+    createdAt: new Date().toISOString(),
   });
 }
 
 export function getPinnedSessionIds(): Set<string> {
-  const data = store.read();
-  const set = new Set<string>();
-  for (const s of data.sessions) {
-    if (s.pinned) set.add(s.sessionId);
-  }
-  return set;
+  const rows = stmtPinned.all() as { sessionId: string }[];
+  return new Set(rows.map(r => r.sessionId));
 }
 
 export function getArchivedSessionIds(): Set<string> {
-  const data = store.read();
-  const set = new Set<string>();
-  for (const s of data.sessions) {
-    if (s.archived) set.add(s.sessionId);
-  }
-  return set;
+  const rows = stmtArchived.all() as { sessionId: string }[];
+  return new Set(rows.map(r => r.sessionId));
 }
 
 /** Returns Map<sessionId, ManagedSession> for fast lookup */

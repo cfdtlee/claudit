@@ -4,9 +4,15 @@
   "type": "module",
   "description": "A web dashboard for managing Claude Code sessions, cron tasks, and todos",
   "license": "MIT",
-  "keywords": ["claude", "cli", "dashboard", "claude-code"],
+  "keywords": [
+    "claude",
+    "cli",
+    "dashboard",
+    "claude-code"
+  ],
   "bin": {
-    "claudit": "./bin/claudit.js"
+    "claudit": "./bin/claudit.js",
+    "claudit-mcp": "./bin/claudit-mcp.js"
   },
   "files": [
     "bin/",
@@ -19,11 +25,14 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^11.10.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "node-cron": "^4.2.1",
     "node-pty": "^1.1.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

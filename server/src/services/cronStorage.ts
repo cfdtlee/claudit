@@ -1,24 +1,91 @@
-import path from 'path';
 import crypto from 'crypto';
 import { CronTask, CronExecution } from '../types.js';
-import { JsonStore } from './jsonStore.js';
+import { db } from './database.js';
 
-const CLAUDE_DIR = path.join(process.env.HOME || '~', '.claude');
-const TASKS_FILE = path.join(CLAUDE_DIR, 'cron-tasks.json');
-const EXECUTIONS_FILE = path.join(CLAUDE_DIR, 'cron-executions.json');
 const MAX_EXECUTIONS_PER_TASK = 100;
 
-const tasksStore = new JsonStore<CronTask[]>(TASKS_FILE, []);
-const execsStore = new JsonStore<CronExecution[]>(EXECUTIONS_FILE, []);
+// --- Prepared statements: Tasks ---
+
+const stmtAllTasks = db.prepare('SELECT * FROM cron_tasks');
+const stmtTaskById = db.prepare('SELECT * FROM cron_tasks WHERE id = ?');
+const stmtInsertTask = db.prepare(`
+  INSERT INTO cron_tasks (id, name, cronExpression, prompt, enabled, projectPath, lastRun, nextRun, createdAt)
+  VALUES (@id, @name, @cronExpression, @prompt, @enabled, @projectPath, @lastRun, @nextRun, @createdAt)
+`);
+const stmtDeleteTask = db.prepare('DELETE FROM cron_tasks WHERE id = ?');
+
+// --- Prepared statements: Executions ---
+
+const stmtExecsByTask = db.prepare(
+  'SELECT * FROM cron_executions WHERE taskId = ? ORDER BY startedAt DESC'
+);
+const stmtInsertExec = db.prepare(`
+  INSERT INTO cron_executions (id, taskId, startedAt, finishedAt, status, output, error)
+  VALUES (@id, @taskId, @startedAt, @finishedAt, @status, @output, @error)
+`);
+const stmtExecById = db.prepare('SELECT * FROM cron_executions WHERE id = ?');
+const stmtDeleteExec = db.prepare('DELETE FROM cron_executions WHERE id = ?');
+
+// Trim: keep latest MAX_EXECUTIONS_PER_TASK, delete the rest
+const stmtTrimExecs = db.prepare(`
+  DELETE FROM cron_executions WHERE taskId = ? AND id NOT IN (
+    SELECT id FROM cron_executions WHERE taskId = ? ORDER BY startedAt DESC LIMIT ?
+  )
+`);
+
+// --- Row mappers ---
+
+function rowToTask(row: any): CronTask {
+  const task: CronTask = {
+    id: row.id,
+    name: row.name,
+    cronExpression: row.cronExpression,
+    prompt: row.prompt,
+    enabled: row.enabled === 1,
+    createdAt: row.createdAt,
+  };
+  if (row.projectPath != null) task.projectPath = row.projectPath;
+  if (row.lastRun != null) task.lastRun = row.lastRun;
+  if (row.nextRun != null) task.nextRun = row.nextRun;
+  return task;
+}
+
+function taskToParams(task: CronTask) {
+  return {
+    id: task.id,
+    name: task.name,
+    cronExpression: task.cronExpression,
+    prompt: task.prompt,
+    enabled: task.enabled ? 1 : 0,
+    projectPath: task.projectPath ?? null,
+    lastRun: task.lastRun ?? null,
+    nextRun: task.nextRun ?? null,
+    createdAt: task.createdAt,
+  };
+}
+
+function rowToExec(row: any): CronExecution {
+  const exec: CronExecution = {
+    id: row.id,
+    taskId: row.taskId,
+    startedAt: row.startedAt,
+    status: row.status,
+  };
+  if (row.finishedAt != null) exec.finishedAt = row.finishedAt;
+  if (row.output != null) exec.output = row.output;
+  if (row.error != null) exec.error = row.error;
+  return exec;
+}
 
 // --- Tasks ---
 
 export function getAllTasks(): CronTask[] {
-  return tasksStore.read();
+  return stmtAllTasks.all().map(rowToTask);
 }
 
 export function getTask(id: string): CronTask | undefined {
-  return getAllTasks().find(t => t.id === id);
+  const row = stmtTaskById.get(id);
+  return row ? rowToTask(row) : undefined;
 }
 
 export function createTask(data: Omit<CronTask, 'id' | 'createdAt'>): CronTask {
@@ -27,47 +94,29 @@ export function createTask(data: Omit<CronTask, 'id' | 'createdAt'>): CronTask {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
-  tasksStore.update(tasks => { tasks.push(task); });
+  stmtInsertTask.run(taskToParams(task));
   return task;
 }
 
 export function updateTask(id: string, updates: Partial<CronTask>): CronTask | null {
-  let result: CronTask | null = null;
-  tasksStore.update(tasks => {
-    const idx = tasks.findIndex(t => t.id === id);
-    if (idx !== -1) {
-      tasks[idx] = { ...tasks[idx], ...updates, id };
-      result = tasks[idx];
-    }
-  });
-  return result;
+  const existing = getTask(id);
+  if (!existing) return null;
+  const merged: CronTask = { ...existing, ...updates, id };
+  stmtDeleteTask.run(id);
+  stmtInsertTask.run(taskToParams(merged));
+  return merged;
 }
 
 export function deleteTask(id: string): boolean {
-  let deleted = false;
-  tasksStore.update(tasks => {
-    const len = tasks.length;
-    const filtered = tasks.filter(t => t.id !== id);
-    deleted = filtered.length < len;
-    tasks.length = 0;
-    tasks.push(...filtered);
-  });
-  if (deleted) {
-    execsStore.update(execs => {
-      const filtered = execs.filter(e => e.taskId !== id);
-      execs.length = 0;
-      execs.push(...filtered);
-    });
-  }
-  return deleted;
+  // CASCADE will delete related executions
+  const result = stmtDeleteTask.run(id);
+  return result.changes > 0;
 }
 
 // --- Executions ---
 
 export function getTaskExecutions(taskId: string): CronExecution[] {
-  return execsStore.read()
-    .filter(e => e.taskId === taskId)
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  return stmtExecsByTask.all(taskId).map(rowToExec);
 }
 
 export function createExecution(taskId: string): CronExecution {
@@ -77,33 +126,34 @@ export function createExecution(taskId: string): CronExecution {
     startedAt: new Date().toISOString(),
     status: 'running',
   };
-  execsStore.update(execs => {
-    execs.push(exec);
-    // Trim old executions per task
-    const taskExecs = execs.filter(e => e.taskId === taskId);
-    if (taskExecs.length > MAX_EXECUTIONS_PER_TASK) {
-      const toRemoveIds = new Set(
-        taskExecs
-          .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime())
-          .slice(0, taskExecs.length - MAX_EXECUTIONS_PER_TASK)
-          .map(e => e.id)
-      );
-      const trimmed = execs.filter(e => !toRemoveIds.has(e.id));
-      execs.length = 0;
-      execs.push(...trimmed);
-    }
+  stmtInsertExec.run({
+    id: exec.id,
+    taskId: exec.taskId,
+    startedAt: exec.startedAt,
+    finishedAt: null,
+    status: exec.status,
+    output: null,
+    error: null,
   });
+  // Trim old executions
+  stmtTrimExecs.run(taskId, taskId, MAX_EXECUTIONS_PER_TASK);
   return exec;
 }
 
 export function updateExecution(id: string, updates: Partial<CronExecution>): CronExecution | null {
-  let result: CronExecution | null = null;
-  execsStore.update(execs => {
-    const idx = execs.findIndex(e => e.id === id);
-    if (idx !== -1) {
-      execs[idx] = { ...execs[idx], ...updates, id };
-      result = execs[idx];
-    }
+  const row = stmtExecById.get(id);
+  if (!row) return null;
+  const existing = rowToExec(row);
+  const merged: CronExecution = { ...existing, ...updates, id };
+  stmtDeleteExec.run(id);
+  stmtInsertExec.run({
+    id: merged.id,
+    taskId: merged.taskId,
+    startedAt: merged.startedAt,
+    finishedAt: merged.finishedAt ?? null,
+    status: merged.status,
+    output: merged.output ?? null,
+    error: merged.error ?? null,
   });
-  return result;
+  return merged;
 }

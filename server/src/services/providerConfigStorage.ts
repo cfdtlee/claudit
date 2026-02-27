@@ -1,19 +1,46 @@
-import path from 'path';
 import crypto from 'crypto';
 import { TodoProviderConfig } from '../types.js';
-import { JsonStore } from './jsonStore.js';
+import { db } from './database.js';
 
-const CLAUDE_DIR = path.join(process.env.HOME || '~', '.claude');
-const CONFIG_FILE = path.join(CLAUDE_DIR, 'claudit-todo-providers.json');
+// --- Prepared statements ---
 
-const configStore = new JsonStore<TodoProviderConfig[]>(CONFIG_FILE, []);
+const stmtAll = db.prepare('SELECT * FROM provider_configs');
+const stmtById = db.prepare('SELECT * FROM provider_configs WHERE id = ?');
+const stmtInsert = db.prepare(`
+  INSERT INTO provider_configs (id, providerId, name, enabled, config, syncIntervalMinutes, lastSyncAt, lastSyncError, createdAt)
+  VALUES (@id, @providerId, @name, @enabled, @config, @syncIntervalMinutes, @lastSyncAt, @lastSyncError, @createdAt)
+`);
+const stmtDelete = db.prepare('DELETE FROM provider_configs WHERE id = ?');
 
-export function getAllConfigs(): TodoProviderConfig[] {
-  return configStore.read();
+// --- Row mapper ---
+
+function rowToConfig(row: any): TodoProviderConfig {
+  const config: TodoProviderConfig = {
+    id: row.id,
+    providerId: row.providerId,
+    name: row.name,
+    enabled: row.enabled === 1,
+    config: JSON.parse(row.config),
+    createdAt: row.createdAt,
+  };
+  if (row.syncIntervalMinutes != null) config.syncIntervalMinutes = row.syncIntervalMinutes;
+  if (row.lastSyncAt != null) config.lastSyncAt = row.lastSyncAt;
+  if (row.lastSyncError != null) config.lastSyncError = row.lastSyncError;
+  return config;
 }
 
-export function getConfig(id: string): TodoProviderConfig | undefined {
-  return getAllConfigs().find(c => c.id === id);
+function configToParams(config: TodoProviderConfig) {
+  return {
+    id: config.id,
+    providerId: config.providerId,
+    name: config.name,
+    enabled: config.enabled ? 1 : 0,
+    config: JSON.stringify(config.config),
+    syncIntervalMinutes: config.syncIntervalMinutes ?? null,
+    lastSyncAt: config.lastSyncAt ?? null,
+    lastSyncError: config.lastSyncError ?? null,
+    createdAt: config.createdAt,
+  };
 }
 
 /** Trim whitespace from all string values in config (prevents pasted keys with spaces) */
@@ -25,6 +52,15 @@ function sanitizeConfig(config: Record<string, unknown>): Record<string, unknown
   return result;
 }
 
+export function getAllConfigs(): TodoProviderConfig[] {
+  return stmtAll.all().map(rowToConfig);
+}
+
+export function getConfig(id: string): TodoProviderConfig | undefined {
+  const row = stmtById.get(id);
+  return row ? rowToConfig(row) : undefined;
+}
+
 export function createConfig(data: Omit<TodoProviderConfig, 'id' | 'createdAt'>): TodoProviderConfig {
   const config: TodoProviderConfig = {
     ...data,
@@ -32,31 +68,21 @@ export function createConfig(data: Omit<TodoProviderConfig, 'id' | 'createdAt'>)
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
-  configStore.update(configs => { configs.push(config); });
+  stmtInsert.run(configToParams(config));
   return config;
 }
 
 export function updateConfig(id: string, updates: Partial<TodoProviderConfig>): TodoProviderConfig | null {
-  let result: TodoProviderConfig | null = null;
-  configStore.update(configs => {
-    const idx = configs.findIndex(c => c.id === id);
-    if (idx !== -1) {
-      const sanitized = updates.config ? { ...updates, config: sanitizeConfig(updates.config) } : updates;
-      configs[idx] = { ...configs[idx], ...sanitized, id };
-      result = configs[idx];
-    }
-  });
-  return result;
+  const existing = getConfig(id);
+  if (!existing) return null;
+  const sanitized = updates.config ? { ...updates, config: sanitizeConfig(updates.config) } : updates;
+  const merged: TodoProviderConfig = { ...existing, ...sanitized, id };
+  stmtDelete.run(id);
+  stmtInsert.run(configToParams(merged));
+  return merged;
 }
 
 export function deleteConfig(id: string): boolean {
-  let deleted = false;
-  configStore.update(configs => {
-    const len = configs.length;
-    const filtered = configs.filter(c => c.id !== id);
-    deleted = filtered.length < len;
-    configs.length = 0;
-    configs.push(...filtered);
-  });
-  return deleted;
+  const result = stmtDelete.run(id);
+  return result.changes > 0;
 }

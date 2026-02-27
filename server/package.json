@@ -8,13 +8,17 @@
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "node-cron": "^4.2.1",
     "node-pty": "^1.1.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node-cron": "^3.0.11",
