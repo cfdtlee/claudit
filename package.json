@@ -20,7 +20,7 @@
     "client/dist/"
   ],
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev": "concurrently -n server,client -c blue,green \"PORT=3002 NODE_ENV=development npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client && npm run build --prefix server",
     "prepublishOnly": "npm run build"
   },

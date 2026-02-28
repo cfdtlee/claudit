@@ -4,7 +4,8 @@ import fs from 'fs';
 import Database from 'better-sqlite3';
 
 const DATA_DIR = path.join(os.homedir(), '.claudit');
-const DB_PATH = path.join(DATA_DIR, 'claudit.db');
+const DB_NAME = process.env.NODE_ENV === 'development' ? 'claudit-dev.db' : 'claudit.db';
+const DB_PATH = path.join(DATA_DIR, DB_NAME);
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
