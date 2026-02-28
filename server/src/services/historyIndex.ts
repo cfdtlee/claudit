@@ -1,7 +1,13 @@
 import { ProjectGroup } from '../types.js';
 import { getManagedSessionMap, getArchivedSessionIds, getPinnedSessionIds } from './managedSessions.js';
-import { getActivePtySessions } from './ptyManager.js';
 import { scanProjectSessions } from './sessionScanner.js';
+
+// Optional: node-pty may not be available
+let getActivePtySessions: () => ReadonlySet<string> = () => new Set();
+try {
+  const ptyMod = await import('./ptyManager.js');
+  getActivePtySessions = ptyMod.getActivePtySessions;
+} catch {}
 
 let cache: { data: ProjectGroup[]; timestamp: number } | null = null;
 const CACHE_TTL = 30_000; // 30 seconds

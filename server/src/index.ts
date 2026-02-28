@@ -13,7 +13,13 @@ import { ClaudeProcess } from './services/claudeProcess.js';
 import { initScheduler, stopAllJobs } from './services/cronScheduler.js';
 import { initProviderSync, stopProviderSync } from './services/todoSyncEngine.js';
 import { closeMcpConnections } from './services/providers/mcpClient.js';
-import { handleTerminalConnection } from './services/ptyManager.js';
+let handleTerminalConnection: ((ws: import('ws').WebSocket) => void) | null = null;
+try {
+  const ptyMod = await import('./services/ptyManager.js');
+  handleTerminalConnection = ptyMod.handleTerminalConnection;
+} catch {
+  console.warn('[server] ptyManager not available — terminal feature disabled.');
+}
 import { eventBus } from './services/eventBus.js';
 import { closeDb } from './services/database.js';
 
@@ -75,7 +81,12 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 wssTerminal.on('connection', (ws: WebSocket) => {
-  handleTerminalConnection(ws);
+  if (handleTerminalConnection) {
+    handleTerminalConnection(ws);
+  } else {
+    ws.send('\x00' + JSON.stringify({ type: 'error', message: 'Terminal not available: node-pty is not installed. Run: npm install node-pty' }));
+    ws.close();
+  }
 });
 
 wssEvents.on('connection', (ws: WebSocket) => {

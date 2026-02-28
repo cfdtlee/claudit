@@ -2,7 +2,14 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import { WebSocket } from 'ws';
-import * as pty from 'node-pty';
+
+// node-pty is optional — dynamically loaded
+let pty: typeof import('node-pty') | null = null;
+try {
+  pty = await import('node-pty');
+} catch {
+  console.warn('[pty] node-pty not available — terminal feature disabled. Install node-pty to enable it.');
+}
 
 // Track active PTY sessions for status reporting
 const activePtySessions = new Set<string>();
@@ -39,7 +46,7 @@ function sendData(ws: WebSocket, data: string) {
 // --- Persistent PTY cache keyed by sessionId ---
 
 interface PtyEntry {
-  process: pty.IPty;
+  process: import('node-pty').IPty;
   sessionId: string;
   scrollback: string[];       // recent output lines for replay on reattach
   attachedWs: WebSocket | null;
@@ -107,6 +114,8 @@ function spawnPty(
   cols: number,
   rows: number
 ): PtyEntry {
+  if (!pty) throw new Error('node-pty is not installed. Run: npm install node-pty');
+
   // Kill existing PTY for this key if any
   if (ptyCache.has(key)) {
     destroyPty(key);
