@@ -30,15 +30,7 @@ db.exec(`
     sessionId     TEXT,
     sessionLabel  TEXT,
     createdAt     TEXT NOT NULL,
-    completedAt   TEXT,
-    -- provider fields (NULL when no provider)
-    providerId    TEXT,
-    configId      TEXT,
-    externalId    TEXT,
-    externalUrl   TEXT,
-    lastSyncedAt  TEXT,
-    syncStatus    TEXT,
-    syncError     TEXT
+    completedAt   TEXT
   );
 
   CREATE TABLE IF NOT EXISTS cron_tasks (
@@ -61,18 +53,6 @@ db.exec(`
     status     TEXT NOT NULL DEFAULT 'running',
     output     TEXT,
     error      TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS provider_configs (
-    id                  TEXT PRIMARY KEY,
-    providerId          TEXT NOT NULL,
-    name                TEXT NOT NULL,
-    enabled             INTEGER NOT NULL DEFAULT 1,
-    config              TEXT NOT NULL DEFAULT '{}',
-    syncIntervalMinutes INTEGER,
-    lastSyncAt          TEXT,
-    lastSyncError       TEXT,
-    createdAt           TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS managed_sessions (

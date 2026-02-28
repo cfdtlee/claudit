@@ -319,41 +319,7 @@ export default function TodoDetail({ todoId, onTodoDeleted }: Props) {
           );
         })()}
 
-        {todo.provider && (
-          <div className="mb-3">
-            <Collapsible title="Provider" defaultOpen storageKey={`claudit:todo:${todo.id}:provider`}>
-              <div className="text-sm bg-gray-800 rounded-lg p-2 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">Source:</span>
-                  <span className="text-gray-300">{todo.provider.providerId}</span>
-                  <StatusBadge status={todo.provider.syncStatus as StatusType} />
-                </div>
-                {todo.provider.lastSyncedAt && (
-                  <div>
-                    <span className="text-gray-500">Last synced:</span>{' '}
-                    <span className="text-gray-300">{new Date(todo.provider.lastSyncedAt).toLocaleString()}</span>
-                  </div>
-                )}
-                {todo.provider.externalUrl && (
-                  <div>
-                    <span className="text-gray-500">External link:</span>{' '}
-                    <a href={todo.provider.externalUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 underline text-xs">
-                      Open in {todo.provider.providerId}
-                    </a>
-                  </div>
-                )}
-                {todo.provider.syncError && (
-                  <div className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1">
-                    {todo.provider.syncError}
-                  </div>
-                )}
-              </div>
-            </Collapsible>
-          </div>
-        )}
-
-        {!todo.description && !todo.sessionId && !todo.provider && (
+        {!todo.description && !todo.sessionId && (
           <div className="text-gray-600 text-sm">No additional details.</div>
         )}
       </div>

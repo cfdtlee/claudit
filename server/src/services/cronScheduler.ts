@@ -23,7 +23,6 @@ function formatTodosForPrompt(): string {
     const icon = PRIORITY_ICON[t.priority] || '⚪';
     let line = `${i + 1}. ${icon} [${t.priority}] ${t.title}`;
     if (t.description) line += `\n   ${t.description}`;
-    if (t.provider?.externalUrl) line += `\n   Link: ${t.provider.externalUrl}`;
     return line;
   }).join('\n');
 }

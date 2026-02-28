@@ -7,12 +7,9 @@ import sessionRoutes from './routes/sessions.js';
 import cronRoutes from './routes/cron.js';
 import todoRoutes from './routes/todo.js';
 import groupRoutes from './routes/groups.js';
-import todoProviderRoutes from './routes/todoProviders.js';
 import filesystemRoutes from './routes/filesystem.js';
 import { ClaudeProcess } from './services/claudeProcess.js';
 import { initScheduler, stopAllJobs } from './services/cronScheduler.js';
-import { initProviderSync, stopProviderSync } from './services/todoSyncEngine.js';
-import { closeMcpConnections } from './services/providers/mcpClient.js';
 let handleTerminalConnection: ((ws: import('ws').WebSocket) => void) | null = null;
 try {
   const ptyMod = await import('./services/ptyManager.js');
@@ -33,7 +30,6 @@ app.use(express.json());
 // REST routes
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/cron', cronRoutes);
-app.use('/api/todo/providers', todoProviderRoutes);
 app.use('/api/todo/groups', groupRoutes);
 app.use('/api/todo', todoRoutes);
 app.use('/api/filesystem', filesystemRoutes);
@@ -190,15 +186,12 @@ wss.on('connection', (ws: WebSocket) => {
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   initScheduler();
-  initProviderSync();
 });
 
 // Graceful shutdown for tsx watch restarts
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, () => {
     stopAllJobs();
-    stopProviderSync();
-    closeMcpConnections();
     closeDb();
     server.close();
     process.exit(0);

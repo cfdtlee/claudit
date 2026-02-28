@@ -9,12 +9,6 @@ export type {
   CronExecution,
   TodoGroup,
   TodoItem,
-  TodoProviderOrigin,
-  TodoProviderConfig,
-  ProviderSyncResult,
-  ProviderConfigField,
-  ExternalTodoItem,
-  ProviderTypeInfo,
 } from '../../shared/src/types.js';
 
 // Server-only types

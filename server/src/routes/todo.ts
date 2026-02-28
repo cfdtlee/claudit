@@ -7,8 +7,6 @@ import {
   deleteTodo,
   reorderTodos,
 } from '../services/todoStorage.js';
-import { pushCompletion } from '../services/todoSyncEngine.js';
-
 const router = Router();
 
 // GET /api/todo — list all todos
@@ -65,17 +63,10 @@ router.put('/reorder', (req, res) => {
 // PUT /api/todo/:id — update todo
 router.put('/:id', (req, res) => {
   try {
-    const before = getTodo(req.params.id);
     const todo = updateTodo(req.params.id, req.body);
     if (!todo) {
       res.status(404).json({ error: 'Todo not found' });
       return;
-    }
-    // If a provider-linked todo was just completed, push completion async
-    if (todo.provider && todo.completed && before && !before.completed) {
-      pushCompletion(todo).catch(err => {
-        console.error('Failed to push completion:', err);
-      });
     }
     res.json(todo);
   } catch (err) {

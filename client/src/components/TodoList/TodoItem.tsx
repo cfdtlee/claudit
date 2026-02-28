@@ -9,12 +9,6 @@ const priorityColors = {
   high: 'bg-red-500',
 };
 
-const providerColors: Record<string, string> = {
-  meego: 'bg-blue-900/50 text-blue-400',
-  'lark-docs': 'bg-green-900/50 text-green-400',
-  supabase: 'bg-emerald-900/50 text-emerald-400',
-};
-
 interface Props {
   todo: TodoItemType;
   selected: boolean;
@@ -79,14 +73,6 @@ export default function TodoItem({ todo, selected, multiSelected, sessionStatus,
           </span>
           {sessionStatus && (
             <StatusDot status={sessionStatus as StatusType} title={`Session: ${sessionStatus}`} />
-          )}
-          {todo.provider && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 flex items-center gap-1 ${
-              providerColors[todo.provider.providerId] || 'bg-gray-700 text-gray-400'
-            }`}>
-              <StatusDot status={todo.provider.syncStatus as StatusType} />
-              {todo.provider.providerId}
-            </span>
           )}
         </div>
         <div className="text-xs text-gray-500 mt-1 ml-4">{timeAgo}</div>

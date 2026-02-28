@@ -1,6 +1,6 @@
 {
   "name": "claudit",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "type": "module",
   "description": "A web dashboard for managing Claude Code sessions, cron tasks, and todos",
   "license": "MIT",
@@ -20,6 +20,7 @@
     "client/dist/"
   ],
   "scripts": {
+    "postinstall": "find node_modules/node-pty -name spawn-helper -exec chmod +x {} + 2>/dev/null || true",
     "dev": "concurrently -n server,client -c blue,green \"PORT=3002 NODE_ENV=development npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client && npm run build --prefix server",
     "prepublishOnly": "npm run build"
@@ -30,11 +31,9 @@
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "node-cron": "^4.2.1",
+    "node-pty": "^1.1.0",
     "ws": "^8.18.0",
     "zod": "^4.3.6"
-  },
-  "optionalDependencies": {
-    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

@@ -82,16 +82,6 @@ export interface TodoGroup {
 
 // --- Todo Types ---
 
-export interface TodoProviderOrigin {
-  providerId: string;
-  configId: string;
-  externalId: string;
-  externalUrl?: string;
-  lastSyncedAt: string;
-  syncStatus: 'synced' | 'local_modified' | 'sync_error';
-  syncError?: string;
-}
-
 export interface TodoItem {
   id: string;
   title: string;
@@ -104,49 +94,4 @@ export interface TodoItem {
   position: number;
   createdAt: string;
   completedAt?: string;
-  provider?: TodoProviderOrigin;
-}
-
-export interface TodoProviderConfig {
-  id: string;
-  providerId: string;
-  name: string;
-  enabled: boolean;
-  config: Record<string, unknown>;
-  syncIntervalMinutes?: number;
-  lastSyncAt?: string;
-  lastSyncError?: string;
-  createdAt: string;
-}
-
-export interface ProviderSyncResult {
-  configId: string;
-  imported: number;
-  updated: number;
-  errors: string[];
-}
-
-export interface ProviderConfigField {
-  key: string;
-  label: string;
-  type: 'string' | 'number' | 'boolean' | 'select';
-  required: boolean;
-  placeholder?: string;
-  options?: { value: string; label: string }[];
-  secret?: boolean;
-}
-
-export interface ExternalTodoItem {
-  externalId: string;
-  externalUrl?: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  priority: 'low' | 'medium' | 'high';
-}
-
-export interface ProviderTypeInfo {
-  id: string;
-  displayName: string;
-  configSchema: ProviderConfigField[];
 }

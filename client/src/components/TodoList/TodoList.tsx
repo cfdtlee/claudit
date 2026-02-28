@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { TodoItem as TodoItemType, TodoGroup, SessionSummary } from '../../types';
 import { fetchTodos, createTodo, updateTodo, reorderTodos } from '../../api/todo';
 import { fetchGroups, createGroup } from '../../api/groups';
-import { syncAllProviders } from '../../api/todoProviders';
 import { fetchSessions } from '../../api/sessions';
 import { useUIStore } from '../../stores/useUIStore';
 import {
@@ -20,7 +19,6 @@ import {
 import TodoItem from './TodoItem';
 import TodoForm from './TodoForm';
 import NewSessionModal from '../NewSessionModal';
-import ProviderSettings from './ProviderSettings';
 import GroupManager from './GroupManager';
 
 type Filter = 'all' | 'active' | 'done';
@@ -38,9 +36,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showNewSessionModal, setShowNewSessionModal] = useState(false);
-  const [showProviderSettings, setShowProviderSettings] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
-  const [syncingAll, setSyncingAll] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -159,21 +155,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
       setTodos(prev => prev.map(t => t.id === updated.id ? updated : t));
     } catch (err) {
       console.error('Failed to toggle todo:', err);
-    }
-  };
-
-  const handleSyncAll = async () => {
-    setSyncingAll(true);
-    try {
-      const results = await syncAllProviders();
-      const total = results.reduce((a, r) => ({ imported: a.imported + r.imported, updated: a.updated + r.updated }), { imported: 0, updated: 0 });
-      if (total.imported > 0 || total.updated > 0) {
-        await loadTodos();
-      }
-    } catch (err) {
-      console.error('Failed to sync providers:', err);
-    } finally {
-      setSyncingAll(false);
     }
   };
 
@@ -336,21 +317,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
       <div className="p-4 border-b border-gray-800 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-200">Todos</h2>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleSyncAll}
-            disabled={syncingAll}
-            title="Sync all providers"
-            className="text-xs px-2 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
-          >
-            {syncingAll ? '...' : '↻'}
-          </button>
-          <button
-            onClick={() => setShowProviderSettings(true)}
-            title="Provider settings"
-            className="text-xs px-2 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
-          >
-            ⚙
-          </button>
           <button
             onClick={() => { setShowForm(!showForm); if (showForm) setTodoSessionPrefill(null); }}
             className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
@@ -584,9 +550,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
         />
       )}
 
-      {showProviderSettings && (
-        <ProviderSettings onClose={() => { setShowProviderSettings(false); loadTodos(); }} />
-      )}
     </div>
   );
 }

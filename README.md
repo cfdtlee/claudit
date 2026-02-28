@@ -1,85 +1,27 @@
 # Claudit
 
-Web tool for managing and interacting with local Claude Code sessions.
+Web dashboard for managing and interacting with local Claude Code sessions, cron tasks, and todos.
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    Browser :5173                     │
-│  ┌──────────────┐  ┌────────────────────────────┐   │
-│  │ SessionList   │  │ SessionDetail              │   │
-│  │  SearchBar    │  │  MessageBubble (markdown)  │   │
-│  │  ProjectGroup │  │  ThinkingBlock (collapse)  │   │
-│  │  SessionItem  │  │  ToolUseBlock  (collapse)  │   │
-│  │               │  │  ChatInput → WebSocket     │   │
-│  └──────────────┘  └────────────────────────────┘   │
-│       300px              flex 1fr                    │
-└──────────┬──────────────────┬───────────────────────┘
-           │ REST /api        │ WS /ws/chat
-           ▼                  ▼
-┌─────────────────────────────────────────────────────┐
-│                  Express :3001                       │
-│                                                      │
-│  GET /api/sessions?q=       → historyIndex.ts        │
-│  GET /api/sessions/:h/:id   → sessionParser.ts       │
-│                                                      │
-│  WS  /ws/chat               → claudeProcess.ts       │
-│       resume / message / stop    │                   │
-│                                  ▼                   │
-│                         spawn claude CLI              │
-│                         --resume <id> -p              │
-│                         --output-format stream-json   │
-│                         --input-format stream-json    │
-│                         --verbose                     │
-└──────────────────────────┬──────────────────────────┘
-                           │ read
-                           ▼
-                    ~/.claude/
-                    ├── history.jsonl
-                    └── projects/{hash}/{sessionId}.jsonl
-```
-
-**Tech stack:** React + Vite + Tailwind CSS (client) / Express + WebSocket (server)
-
-## Data Flow
-
-- **Session list**: scans `~/.claude/projects/` directories + `history.jsonl` for metadata, cached 30s
-- **Session detail**: parses session JSONL, merges assistant records by `message.id`, filters out internal tool_result exchanges
-- **Live chat**: spawns `claude` CLI as a child process per WebSocket connection, streams JSON events bidirectionally
-
-## Project Structure
-
-```
-claudit/
-├── server/src/
-│   ├── index.ts                 # Express + WebSocket entry
-│   ├── routes/sessions.ts       # REST endpoints
-│   └── services/
-│       ├── historyIndex.ts      # Session index builder
-│       ├── sessionParser.ts     # JSONL parser
-│       └── claudeProcess.ts     # Claude CLI subprocess manager
-└── client/src/
-    ├── App.tsx
-    ├── api/sessions.ts          # REST client
-    ├── hooks/useClaudeChat.ts   # WebSocket hook
-    └── components/
-        ├── Layout.tsx
-        ├── SessionList/         # Left panel
-        └── SessionDetail/       # Right panel + chat
-```
-
-## Getting Started
+## Install
 
 ```bash
-# Install dependencies
-npm install && npm install --prefix server && npm install --prefix client
-
-# Start dev (server :3001 + client :5173)
-npm run dev
+npm install -g claudit
 ```
 
-Open http://localhost:5173
+**Prerequisites:**
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- Node.js 18+
+- C++ build tools for native modules:
+  - macOS: `xcode-select --install`
+  - Linux: `sudo apt install build-essential python3`
+
+## Usage
+
+```bash
+claudit
+```
+
+Open http://localhost:3001
 
 ## MCP Server (AI Tool Integration)
 
@@ -104,18 +46,6 @@ claude mcp add claudit-todos claudit-mcp
 ```
 
 **Option B: Edit `~/.claude/settings.json` manually**
-
-```json
-{
-  "mcpServers": {
-    "claudit-todos": {
-      "command": "claudit-mcp"
-    }
-  }
-}
-```
-
-**Option C: Project-level only (`.mcp.json` in project root)**
 
 ```json
 {

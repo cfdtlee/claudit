@@ -3,6 +3,14 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+
+const CLAUDE_BIN = (() => {
+  try {
+    return execSync('which claude', { encoding: 'utf-8' }).trim();
+  } catch {
+    return 'claude';
+  }
+})();
 import { getSessionIndex, invalidateSessionCache } from '../services/historyIndex.js';
 import { parseSession } from '../services/sessionParser.js';
 import { addManagedSession, renameManagedSession, archiveManagedSession, removeManagedSession, pinManagedSession } from '../services/managedSessions.js';
@@ -71,10 +79,17 @@ router.post('/new', (req, res) => {
       : 'hello';
     const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'));
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
-    const result = execSync(
-      `claude -p --output-format json --max-turns 1 '${escapedPrompt}'`,
-      { cwd: actualProjectPath, encoding: 'utf-8', timeout: 60_000, env: cleanEnv },
-    );
+    let result: string;
+    try {
+      result = execSync(
+        `${CLAUDE_BIN} -p --output-format json --max-turns 1 '${escapedPrompt}'`,
+        { cwd: actualProjectPath, encoding: 'utf-8', timeout: 60_000, env: cleanEnv },
+      );
+    } catch (e: any) {
+      console.error(`[session] Claude CLI failed:`, e.stderr || e.stdout || e.message);
+      res.status(500).json({ error: `Failed to create session: ${e.stderr || e.message}` });
+      return;
+    }
 
     // Parse the JSON result to get the session ID
     const parsed = JSON.parse(result);

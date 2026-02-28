@@ -43,7 +43,6 @@ server.tool(
       createdAt: t.createdAt,
       completedAt: t.completedAt,
       sessionId: t.sessionId,
-      externalUrl: t.provider?.externalUrl,
     }));
 
     return {

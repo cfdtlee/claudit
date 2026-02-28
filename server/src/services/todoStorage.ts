@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { TodoItem, TodoProviderOrigin } from '../types.js';
+import { TodoItem } from '../types.js';
 import { db } from './database.js';
 
 // --- Prepared statements ---
@@ -7,10 +7,8 @@ import { db } from './database.js';
 const stmtAll = db.prepare('SELECT * FROM todos ORDER BY position ASC, createdAt ASC');
 const stmtById = db.prepare('SELECT * FROM todos WHERE id = ?');
 const stmtInsert = db.prepare(`
-  INSERT INTO todos (id, title, description, completed, priority, sessionId, sessionLabel, groupId, position, createdAt, completedAt,
-    providerId, configId, externalId, externalUrl, lastSyncedAt, syncStatus, syncError)
-  VALUES (@id, @title, @description, @completed, @priority, @sessionId, @sessionLabel, @groupId, @position, @createdAt, @completedAt,
-    @providerId, @configId, @externalId, @externalUrl, @lastSyncedAt, @syncStatus, @syncError)
+  INSERT INTO todos (id, title, description, completed, priority, sessionId, sessionLabel, groupId, position, createdAt, completedAt)
+  VALUES (@id, @title, @description, @completed, @priority, @sessionId, @sessionLabel, @groupId, @position, @createdAt, @completedAt)
 `);
 const stmtDelete = db.prepare('DELETE FROM todos WHERE id = ?');
 const stmtMaxPosition = db.prepare('SELECT COALESCE(MAX(position), 0) as maxPos FROM todos WHERE groupId IS ?');
@@ -30,22 +28,10 @@ function rowToTodo(row: any): TodoItem {
   if (row.sessionLabel != null) todo.sessionLabel = row.sessionLabel;
   if (row.groupId != null) todo.groupId = row.groupId;
   if (row.completedAt != null) todo.completedAt = row.completedAt;
-  if (row.providerId != null) {
-    todo.provider = {
-      providerId: row.providerId,
-      configId: row.configId,
-      externalId: row.externalId,
-      externalUrl: row.externalUrl,
-      lastSyncedAt: row.lastSyncedAt,
-      syncStatus: row.syncStatus,
-      syncError: row.syncError,
-    } as TodoProviderOrigin;
-  }
   return todo;
 }
 
 function todoToParams(todo: TodoItem) {
-  const p = todo.provider;
   return {
     id: todo.id,
     title: todo.title,
@@ -58,13 +44,6 @@ function todoToParams(todo: TodoItem) {
     position: todo.position ?? 0,
     createdAt: todo.createdAt,
     completedAt: todo.completedAt ?? null,
-    providerId: p?.providerId ?? null,
-    configId: p?.configId ?? null,
-    externalId: p?.externalId ?? null,
-    externalUrl: p?.externalUrl ?? null,
-    lastSyncedAt: p?.lastSyncedAt ?? null,
-    syncStatus: p?.syncStatus ?? null,
-    syncError: p?.syncError ?? null,
   };
 }
 
