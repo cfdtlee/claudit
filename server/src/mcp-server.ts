@@ -11,7 +11,7 @@ import {
 } from './services/todoStorage.js';
 
 const server = new McpServer({
-  name: 'claudit-todos',
+  name: 'claudit',
   version: '0.1.0',
 });
 
@@ -22,7 +22,7 @@ server.tool(
   {
     status: z.enum(['pending', 'completed', 'all']).optional().describe('Filter by completion status. Default: all'),
     priority: z.enum(['low', 'medium', 'high']).optional().describe('Filter by priority level'),
-    groupId: z.string().optional().describe('Filter by group ID. Use "ungrouped" for todos without a group.'),
+    groupId: z.string().optional().describe('Filter by group ID. Pass "ungrouped" to get only todos that are not assigned to any group.'),
   },
   async ({ status, priority, groupId }) => {
     let todos = getAllTodos();
@@ -59,9 +59,9 @@ server.tool(
 // --- get_todo ---
 server.tool(
   'get_todo',
-  'Get full details of a specific todo by ID.',
+  'Get full details of a specific todo by ID, including title, description, priority, completion status, linked session, and timestamps.',
   {
-    id: z.string().describe('The todo ID'),
+    id: z.string().describe('The todo ID (UUID format, obtained from list_todos)'),
   },
   async ({ id }) => {
     const todo = getTodo(id);
@@ -80,14 +80,14 @@ server.tool(
 // --- create_todo ---
 server.tool(
   'create_todo',
-  'Create a new todo item.',
+  'Create a new todo item. Use this when the user asks to add a task, reminder, or action item. Returns the created todo with its generated ID.',
   {
-    title: z.string().describe('Title of the todo'),
-    description: z.string().optional().describe('Detailed description'),
-    priority: z.enum(['low', 'medium', 'high']).optional().describe('Priority level. Default: medium'),
-    sessionId: z.string().optional().describe('Link to a Claude session ID'),
-    sessionLabel: z.string().optional().describe('Display label for the linked session'),
-    groupId: z.string().optional().describe('Group ID to assign the todo to'),
+    title: z.string().describe('Short, actionable title (e.g. "Fix login bug", "Review PR #42")'),
+    description: z.string().optional().describe('Longer details, context, or acceptance criteria for the todo'),
+    priority: z.enum(['low', 'medium', 'high']).optional().describe('Priority level: "high" for urgent/blocking items, "low" for nice-to-haves. Default: medium'),
+    sessionId: z.string().optional().describe('Claude Code session ID to link this todo to (for tracking which session created it)'),
+    sessionLabel: z.string().optional().describe('Human-readable label for the linked session (shown in UI)'),
+    groupId: z.string().optional().describe('Group ID to organize this todo under (obtained from the claudit dashboard)'),
   },
   async ({ title, description, priority, sessionId, sessionLabel, groupId }) => {
     const todo = createTodo({
@@ -109,14 +109,14 @@ server.tool(
 // --- update_todo ---
 server.tool(
   'update_todo',
-  'Update an existing todo. Only provided fields will be changed.',
+  'Update an existing todo. Only provided fields will be changed — omitted fields remain unchanged. Use this to mark todos complete, change priority, edit text, or move between groups.',
   {
-    id: z.string().describe('The todo ID to update'),
-    title: z.string().optional().describe('New title'),
-    description: z.string().optional().describe('New description'),
-    completed: z.boolean().optional().describe('Mark as completed (true) or pending (false)'),
+    id: z.string().describe('The todo ID to update (UUID format, obtained from list_todos)'),
+    title: z.string().optional().describe('New title to replace the existing one'),
+    description: z.string().optional().describe('New description to replace the existing one'),
+    completed: z.boolean().optional().describe('Set true to mark as done, false to reopen. Completing a todo automatically records a completedAt timestamp'),
     priority: z.enum(['low', 'medium', 'high']).optional().describe('New priority level'),
-    groupId: z.string().nullable().optional().describe('Group ID to move the todo to (null to ungroup)'),
+    groupId: z.string().nullable().optional().describe('Move todo to a different group. Pass a group ID to assign, or null to remove from its current group'),
   },
   async ({ id, title, description, completed, priority, groupId }) => {
     const updates: Record<string, unknown> = {};
@@ -145,9 +145,9 @@ server.tool(
 // --- delete_todo ---
 server.tool(
   'delete_todo',
-  'Delete a todo by ID.',
+  'Permanently delete a todo. This cannot be undone. Prefer marking as completed (update_todo with completed=true) unless the user explicitly wants to remove it.',
   {
-    id: z.string().describe('The todo ID to delete'),
+    id: z.string().describe('The todo ID to delete (UUID format, obtained from list_todos)'),
   },
   async ({ id }) => {
     const deleted = deleteTodo(id);

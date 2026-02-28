@@ -5,6 +5,9 @@ import SessionItem from './SessionItem';
 interface Props {
   group: ProjectGroupType;
   isArchived?: boolean;
+  selectedIds?: Set<string>;
+  onSessionClick?: (e: React.MouseEvent, sessionId: string) => void;
+  onSessionContextMenu?: (e: React.MouseEvent, sessionId: string) => void;
 }
 
 function shortProjectName(path: string): string {
@@ -12,7 +15,7 @@ function shortProjectName(path: string): string {
   return parts.slice(-2).join('/');
 }
 
-export default function ProjectGroup({ group, isArchived }: Props) {
+export default function ProjectGroup({ group, isArchived, selectedIds, onSessionClick, onSessionContextMenu }: Props) {
   const expandedSet = useSessionStore(s => s.expandedSet);
   const archivedGroupExpanded = useSessionStore(s => s.archivedGroupExpanded);
   const toggleGroup = useSessionStore(s => s.toggleGroup);
@@ -51,6 +54,9 @@ export default function ProjectGroup({ group, isArchived }: Props) {
               session={s}
               projectHash={group.projectHash}
               isArchived={isArchived}
+              multiSelected={selectedIds?.has(s.sessionId)}
+              onMultiClick={onSessionClick}
+              onContextMenu={onSessionContextMenu}
             />
           ))}
         </div>

@@ -8,6 +8,9 @@ interface Props {
   session: SessionSummary;
   projectHash: string;
   isArchived?: boolean;
+  multiSelected?: boolean;
+  onMultiClick?: (e: React.MouseEvent, sessionId: string) => void;
+  onContextMenu?: (e: React.MouseEvent, sessionId: string) => void;
 }
 
 function formatTime(ts: number): string {
@@ -25,7 +28,7 @@ function formatTime(ts: number): string {
   return d.toLocaleDateString();
 }
 
-export default function SessionItem({ session, projectHash, isArchived }: Props) {
+export default function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiClick, onContextMenu }: Props) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [showMenu, setShowMenu] = useState(false);
@@ -50,8 +53,25 @@ export default function SessionItem({ session, projectHash, isArchived }: Props)
     }
   }, [editing]);
 
-  const handleSelect = () => {
-    selectSession(projectHash, session.sessionId, session.projectPath);
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Prevent text selection on shift/cmd+click
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (onMultiClick) {
+      onMultiClick(e, session.sessionId);
+    } else {
+      selectSession(projectHash, session.sessionId, session.projectPath);
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (onContextMenu) {
+      onContextMenu(e, session.sessionId);
+    }
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
@@ -103,9 +123,13 @@ export default function SessionItem({ session, projectHash, isArchived }: Props)
   return (
     <div
       className={`group relative w-full text-left border-b border-gray-800/50 transition-colors cursor-pointer
-        ${isSelected ? 'bg-blue-900/30 border-l-2 border-l-blue-500' : 'hover:bg-gray-800/50'}`}
-      onClick={handleSelect}
+        ${multiSelected ? 'bg-gray-800/70 ring-1 ring-blue-500/30' : ''}
+        ${isSelected && !multiSelected ? 'bg-blue-900/30 border-l-2 border-l-blue-500' : ''}
+        ${!isSelected && !multiSelected ? 'hover:bg-gray-800/50' : ''}`}
+      onMouseDown={handleMouseDown}
+      onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
     >
       <div className="px-4 py-2.5">
         {editing ? (
@@ -130,7 +154,15 @@ export default function SessionItem({ session, projectHash, isArchived }: Props)
               {displayText}
             </div>
             <button
-              onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              onClick={e => {
+                e.stopPropagation();
+                if (multiSelected && onContextMenu) {
+                  // When multi-selected, delegate to batch context menu
+                  onContextMenu(e, session.sessionId);
+                } else {
+                  setShowMenu(!showMenu);
+                }
+              }}
               className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 transition-opacity px-1 text-sm flex-shrink-0"
             >
               ...
