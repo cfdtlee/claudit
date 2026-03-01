@@ -32,7 +32,9 @@ interface SessionState {
   _initializedExpanded: boolean;
   _eventWs: WebSocket | null;
   _reconnectTimer: ReturnType<typeof setTimeout> | null;
+  _reconnectDelay: number;
   _runningPollTimer: ReturnType<typeof setInterval> | null;
+  _wsDebounceTimer: ReturnType<typeof setTimeout> | null;
 
   // Actions
   fetchSessions: (q?: string) => Promise<void>;
@@ -74,7 +76,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   _initializedExpanded: false,
   _eventWs: null,
   _reconnectTimer: null,
+  _reconnectDelay: 1000,
   _runningPollTimer: null,
+  _wsDebounceTimer: null,
 
   fetchSessions: async (q?: string) => {
     try {
@@ -135,10 +139,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   renameSession: async (sessionId, name) => {
+    // Optimistic update
+    const snapshot = { groups: get().groups };
+    set({
+      groups: snapshot.groups.map(g => ({
+        ...g,
+        sessions: g.sessions.map(s =>
+          s.sessionId === sessionId ? { ...s, displayName: name } : s
+        ),
+      })),
+    });
     try {
       await apiRenameSession(sessionId, name);
-      await get().fetchSessions(get().query || undefined);
+      get().fetchSessions(get().query || undefined);
     } catch (e: any) {
+      set({ groups: snapshot.groups });
       alert(`Failed to rename session: ${e.message}`);
     }
   },
@@ -151,30 +166,61 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const s = g.sessions.find(s => s.sessionId === sessionId);
       if (s) { currentlyPinned = !!s.pinned; break; }
     }
+    // Optimistic update
+    const snapshot = { groups };
+    set({
+      groups: snapshot.groups.map(g => ({
+        ...g,
+        sessions: g.sessions.map(s =>
+          s.sessionId === sessionId ? { ...s, pinned: !currentlyPinned } : s
+        ),
+      })),
+    });
     try {
       await apiPinSession(sessionId, !currentlyPinned);
-      await get().fetchSessions(get().query || undefined);
+      get().fetchSessions(get().query || undefined);
     } catch (e: any) {
+      set({ groups: snapshot.groups });
       alert(`Failed to pin session: ${e.message}`);
     }
   },
 
   archiveSession: async (sessionId) => {
+    // Optimistic update: remove from groups, increment archivedCount
+    const snapshot = { groups: get().groups, archivedCount: get().archivedCount };
+    set({
+      groups: snapshot.groups.map(g => ({
+        ...g,
+        sessions: g.sessions.filter(s => s.sessionId !== sessionId),
+      })).filter(g => g.sessions.length > 0),
+      archivedCount: snapshot.archivedCount + 1,
+    });
     try {
       await apiArchiveSession(sessionId, true);
-      await get().fetchSessions(get().query || undefined);
-      await get().fetchArchived();
+      get().fetchSessions(get().query || undefined);
+      get().fetchArchived();
     } catch (e: any) {
+      set({ groups: snapshot.groups, archivedCount: snapshot.archivedCount });
       alert(`Failed to archive session: ${e.message}`);
     }
   },
 
   unarchiveSession: async (sessionId) => {
+    // Optimistic update: remove from archivedGroups, decrement archivedCount
+    const snapshot = { archivedGroups: get().archivedGroups, archivedCount: get().archivedCount };
+    set({
+      archivedGroups: snapshot.archivedGroups.map(g => ({
+        ...g,
+        sessions: g.sessions.filter(s => s.sessionId !== sessionId),
+      })).filter(g => g.sessions.length > 0),
+      archivedCount: Math.max(0, snapshot.archivedCount - 1),
+    });
     try {
       await apiArchiveSession(sessionId, false);
-      await get().fetchSessions(get().query || undefined);
-      await get().fetchArchived();
+      get().fetchSessions(get().query || undefined);
+      get().fetchArchived();
     } catch (e: any) {
+      set({ archivedGroups: snapshot.archivedGroups, archivedCount: snapshot.archivedCount });
       alert(`Failed to unarchive session: ${e.message}`);
     }
   },
@@ -191,11 +237,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     if (!window.confirm('Are you sure you want to permanently delete this session? This cannot be undone.')) return;
 
+    // Optimistic update: remove from both groups and archivedGroups
+    const snapshot = { groups, archivedGroups, archivedCount: get().archivedCount };
+    const removeSession = (gs: ProjectGroup[]) =>
+      gs.map(g => ({
+        ...g,
+        sessions: g.sessions.filter(s => s.sessionId !== sessionId),
+      })).filter(g => g.sessions.length > 0);
+    const wasArchived = archivedGroups.some(g => g.sessions.some(s => s.sessionId === sessionId));
+    set({
+      groups: removeSession(groups),
+      archivedGroups: removeSession(archivedGroups),
+      archivedCount: wasArchived ? Math.max(0, snapshot.archivedCount - 1) : snapshot.archivedCount,
+    });
+
     try {
       await apiDeleteSession(projectHash, sessionId);
-      await get().fetchSessions(get().query || undefined);
-      await get().fetchArchived();
+      get().fetchSessions(get().query || undefined);
+      get().fetchArchived();
     } catch (e: any) {
+      set({ groups: snapshot.groups, archivedGroups: snapshot.archivedGroups, archivedCount: snapshot.archivedCount });
       alert(`Failed to delete session: ${e.message}`);
     }
   },
@@ -252,20 +313,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/events`);
 
+    ws.onopen = () => {
+      // Reset backoff on successful connection
+      set({ _reconnectDelay: 1000 });
+    };
+
     ws.onmessage = () => {
-      // Any event triggers a refresh
-      get().fetchSessions(get().query || undefined);
-      get().fetchArchived();
+      // Debounce: collapse rapid events into one refresh
+      const { _wsDebounceTimer } = get();
+      if (_wsDebounceTimer) clearTimeout(_wsDebounceTimer);
+      const timer = setTimeout(() => {
+        set({ _wsDebounceTimer: null });
+        get().fetchSessions(get().query || undefined);
+        get().fetchArchived();
+      }, 500);
+      set({ _wsDebounceTimer: timer });
     };
 
     ws.onclose = () => {
       set({ _eventWs: null });
-      // Auto-reconnect after 3s
+      // Exponential backoff: 1s, 2s, 4s, 8s, ... max 30s
+      const delay = get()._reconnectDelay;
       const timer = setTimeout(() => {
         set({ _reconnectTimer: null });
         get().connectEventStream();
-      }, 3000);
-      set({ _reconnectTimer: timer });
+      }, delay);
+      set({
+        _reconnectTimer: timer,
+        _reconnectDelay: Math.min(delay * 2, 30000),
+      });
     };
 
     ws.onerror = () => {
@@ -276,10 +352,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   disconnectEventStream: () => {
-    const { _eventWs, _reconnectTimer, _runningPollTimer } = get();
+    const { _eventWs, _reconnectTimer, _runningPollTimer, _wsDebounceTimer } = get();
     if (_reconnectTimer) clearTimeout(_reconnectTimer);
     if (_runningPollTimer) clearInterval(_runningPollTimer);
+    if (_wsDebounceTimer) clearTimeout(_wsDebounceTimer);
     if (_eventWs) _eventWs.close();
-    set({ _eventWs: null, _reconnectTimer: null, _runningPollTimer: null });
+    set({ _eventWs: null, _reconnectTimer: null, _runningPollTimer: null, _wsDebounceTimer: null, _reconnectDelay: 1000 });
   },
 }));

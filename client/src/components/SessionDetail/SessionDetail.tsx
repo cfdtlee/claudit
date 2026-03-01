@@ -4,8 +4,8 @@ import { fetchSessionDetail, markSessionSeen } from '../../api/sessions';
 import { fetchTodos } from '../../api/todo';
 import { useUIStore } from '../../stores/useUIStore';
 import EmptyState from './EmptyState';
-import TerminalView from './TerminalView';
 
+const TerminalView = lazy(() => import('./TerminalView'));
 const ConversationView = lazy(() => import('./ConversationView'));
 
 type Tab = 'terminal' | 'history';
@@ -194,7 +194,13 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
 
       {/* Content */}
       {activeTab === 'terminal' ? (
-        <TerminalView sessionId={sessionId} projectPath={projectPath} isNew={isNew} />
+        <Suspense fallback={
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Loading terminal...
+          </div>
+        }>
+          <TerminalView sessionId={sessionId} projectPath={projectPath} isNew={isNew} />
+        </Suspense>
       ) : (
         <Suspense fallback={
           <div className="flex-1 flex items-center justify-center text-gray-500">

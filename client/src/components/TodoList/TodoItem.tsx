@@ -19,7 +19,9 @@ interface Props {
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-export default function TodoItem({ todo, selected, multiSelected, sessionStatus, onSelect, onToggle, onContextMenu }: Props) {
+import { memo } from 'react';
+
+function TodoItem({ todo, selected, multiSelected, sessionStatus, onSelect, onToggle, onContextMenu }: Props) {
   const timeAgo = getTimeAgo(todo.createdAt);
 
   const {
@@ -80,6 +82,8 @@ export default function TodoItem({ todo, selected, multiSelected, sessionStatus,
     </div>
   );
 }
+
+export default memo(TodoItem);
 
 function getTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

@@ -9,6 +9,17 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, '../shared/src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
+          'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          'vendor-markdown': ['react-markdown', 'remark-gfm', 'react-syntax-highlighter'],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:3002',

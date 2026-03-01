@@ -72,6 +72,15 @@ db.exec(`
   );
 `);
 
+// --- Indexes ---
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_todos_groupId ON todos(groupId);
+  CREATE INDEX IF NOT EXISTS idx_todos_completed ON todos(completed);
+  CREATE INDEX IF NOT EXISTS idx_cron_executions_taskId_startedAt ON cron_executions(taskId, startedAt DESC);
+  CREATE INDEX IF NOT EXISTS idx_managed_sessions_archived ON managed_sessions(archived);
+  CREATE INDEX IF NOT EXISTS idx_managed_sessions_pinned ON managed_sessions(pinned);
+`);
+
 // Idempotent ALTER TABLE helper: only swallow "duplicate column" errors
 function addColumnIfNotExists(sql: string) {
   try { db.exec(sql); } catch (e: any) {

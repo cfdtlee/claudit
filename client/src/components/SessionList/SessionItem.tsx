@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { SessionSummary } from '../../types';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useUIStore } from '../../stores/useUIStore';
@@ -28,7 +28,7 @@ function formatTime(ts: number): string {
   return d.toLocaleDateString();
 }
 
-export default function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiClick, onContextMenu }: Props) {
+function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiClick, onContextMenu }: Props) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [showMenu, setShowMenu] = useState(false);
@@ -202,3 +202,5 @@ export default function SessionItem({ session, projectHash, isArchived, multiSel
     </div>
   );
 }
+
+export default memo(SessionItem);

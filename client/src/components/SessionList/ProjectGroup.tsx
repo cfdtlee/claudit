@@ -15,7 +15,9 @@ function shortProjectName(path: string): string {
   return parts.slice(-2).join('/');
 }
 
-export default function ProjectGroup({ group, isArchived, selectedIds, onSessionClick, onSessionContextMenu }: Props) {
+import { memo } from 'react';
+
+function ProjectGroup({ group, isArchived, selectedIds, onSessionClick, onSessionContextMenu }: Props) {
   const expandedSet = useSessionStore(s => s.expandedSet);
   const archivedGroupExpanded = useSessionStore(s => s.archivedGroupExpanded);
   const toggleGroup = useSessionStore(s => s.toggleGroup);
@@ -64,3 +66,5 @@ export default function ProjectGroup({ group, isArchived, selectedIds, onSession
     </div>
   );
 }
+
+export default memo(ProjectGroup);

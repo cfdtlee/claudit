@@ -146,7 +146,7 @@ router.get('/search', (req, res) => {
     const MAX_BYTES = 500 * 1024; // 500KB per file
     const results: { sessionId: string; projectHash: string; projectPath: string; snippet: string; matchCount: number }[] = [];
 
-    for (const group of groups) {
+    outer: for (const group of groups) {
       for (const session of group.sessions) {
         const filePath = path.join(os.homedir(), '.claude', 'projects', group.projectHash, `${session.sessionId}.jsonl`);
         if (!fs.existsSync(filePath)) continue;
@@ -204,6 +204,7 @@ router.get('/search', (req, res) => {
               snippet,
               matchCount,
             });
+            if (results.length >= 50) break outer;
           }
         } catch {
           // skip unreadable files
