@@ -31,20 +31,33 @@ export default function App() {
     return () => disconnectEventStream();
   }, [connectEventStream, disconnectEventStream]);
 
-  // Global keyboard shortcuts: Cmd+K (search), Cmd+N (new item)
+  // Global keyboard shortcuts
+  // Cmd+K or '/' — focus search | 'n' — new item (when not in an input)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable;
 
-      // Cmd/Ctrl+K — focus search
-      if (e.key === 'k') {
+      // Cmd/Ctrl+K — focus search (works even in input)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const input = document.querySelector('[data-search-input]') as HTMLInputElement;
+        input?.focus();
+        return;
+      }
+
+      // Skip single-key shortcuts when typing in an input
+      if (inInput) return;
+
+      // '/' — focus search
+      if (e.key === '/') {
         e.preventDefault();
         const input = document.querySelector('[data-search-input]') as HTMLInputElement;
         input?.focus();
       }
 
-      // Cmd/Ctrl+N — new item in current view
-      if (e.key === 'n' && !e.shiftKey) {
+      // 'n' — new item in current view
+      if (e.key === 'n') {
         e.preventDefault();
         const currentView = useUIStore.getState().view;
         if (currentView === 'sessions') {
