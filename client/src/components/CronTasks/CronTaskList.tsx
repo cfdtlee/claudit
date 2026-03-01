@@ -54,7 +54,7 @@ export default function CronTaskList({ selectedTaskId, onSelect }: Props) {
         <h2 className="text-lg font-semibold text-gray-200">Cron Tasks</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors"
         >
           {showForm ? 'Cancel' : '+ New'}
         </button>

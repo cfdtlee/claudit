@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import Layout from './components/Layout';
 import NavSidebar from './components/NavSidebar';
 import SessionList from './components/SessionList/SessionList';
@@ -19,6 +19,8 @@ export default function App() {
   const selectedTodoId = useUIStore(s => s.selectedTodoId);
   const setSelectedTodoId = useUIStore(s => s.setSelectedTodoId);
 
+  const selectSession = useUIStore(s => s.selectSession);
+  const createSession = useSessionStore(s => s.createSession);
   const connectEventStream = useSessionStore(s => s.connectEventStream);
   const disconnectEventStream = useSessionStore(s => s.disconnectEventStream);
 
@@ -26,6 +28,19 @@ export default function App() {
     connectEventStream();
     return () => disconnectEventStream();
   }, [connectEventStream, disconnectEventStream]);
+
+  const handleCreateFromEmpty = useCallback(async (projectPath: string, initialPrompt?: string, worktree?: { branchName: string }): Promise<boolean> => {
+    try {
+      const result = await createSession(projectPath, { initialPrompt, worktree });
+      if (result) {
+        selectSession(result.projectHash, result.sessionId, result.projectPath, true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [createSession, selectSession]);
 
   const renderSidebar = () => {
     if (view === 'todo') {
@@ -53,6 +68,7 @@ export default function App() {
         <TodoDetail
           todoId={selectedTodoId}
           onTodoDeleted={() => setSelectedTodoId(null)}
+          onTodoCreated={(id) => setSelectedTodoId(id)}
         />
       );
     }
@@ -65,7 +81,7 @@ export default function App() {
           isNew={selected.isNew}
         />
       ) : (
-        <EmptyState />
+        <EmptyState onCreateSession={handleCreateFromEmpty} />
       );
     }
     return (

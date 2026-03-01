@@ -23,7 +23,7 @@ export default function CronTaskItem({ task, selected, onSelect }: Props) {
     <button
       onClick={onSelect}
       className={`w-full text-left px-4 py-3 border-b border-gray-800 transition-colors ${
-        selected ? 'bg-blue-900/30' : 'hover:bg-gray-800/50'
+        selected ? 'bg-claude/10' : 'hover:bg-gray-800/50'
       }`}
     >
       <div className="flex items-center justify-between mb-1">

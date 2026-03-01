@@ -2,7 +2,14 @@
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        claude: {
+          DEFAULT: '#d4915a',
+          hover: '#c07e4a',
+        },
+      },
+    },
   },
   plugins: [require('@tailwindcss/typography')],
 };

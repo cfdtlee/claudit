@@ -37,7 +37,7 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
           value={name}
           onChange={e => setName(e.target.value)}
           required
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
           placeholder="e.g. Daily code review"
         />
       </div>
@@ -52,7 +52,7 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
           onChange={e => setPrompt(e.target.value)}
           required
           rows={5}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude resize-none"
           placeholder="The prompt to send to Claude..."
         />
         <p className="text-xs text-gray-600 mt-1">Use <code className="text-gray-500 bg-gray-800 px-1 rounded">{'{{todos}}'}</code> to inject pending todo list into the prompt</p>
@@ -64,13 +64,13 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
             type="text"
             value={projectPath}
             onChange={e => setProjectPath(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
             placeholder="/path/to/project"
           />
           <button
             type="button"
             onClick={() => setShowBrowser(!showBrowser)}
-            className={`px-3 py-2 text-sm rounded-lg transition-colors ${showBrowser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+            className={`px-3 py-2 text-sm rounded-lg transition-colors ${showBrowser ? 'bg-claude text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
           >
             Browse
           </button>
@@ -88,7 +88,7 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
                   try { localStorage.setItem('claudit:lastBrowserPath', projectPath); } catch {}
                 }
               }}
-              className="mt-2 text-xs text-blue-400 hover:text-blue-300"
+              className="mt-2 text-xs text-claude hover:text-blue-300"
             >
               Done
             </button>
@@ -108,7 +108,7 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 transition-colors"
+          className="px-4 py-2 bg-claude text-white text-sm rounded-lg hover:bg-claude-hover transition-colors"
         >
           {initial ? 'Save Changes' : 'Create Task'}
         </button>

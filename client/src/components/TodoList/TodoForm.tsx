@@ -71,7 +71,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
           type="text"
           value={title}
           onChange={e => setTitle(e.target.value)}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
           placeholder="What needs to be done?"
           autoFocus
         />
@@ -83,7 +83,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
           value={description}
           onChange={e => setDescription(e.target.value)}
           rows={3}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude resize-none"
           placeholder="Optional details..."
         />
       </div>
@@ -116,7 +116,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
           <select
             value={selectedSessionId}
             onChange={e => handleSessionChange(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
           >
             <option value="">(No session)</option>
             {sessions.map(s => (
@@ -133,7 +133,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
             type="text"
             value={selectedSessionId}
             onChange={e => setSelectedSessionId(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
             placeholder="Session ID"
           />
         )}
@@ -150,7 +150,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
         <button
           type="submit"
           disabled={!title.trim()}
-          className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50"
+          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50"
         >
           {initial ? 'Save' : 'Create'}
         </button>

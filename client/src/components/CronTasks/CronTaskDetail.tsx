@@ -155,7 +155,7 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
             <button
               onClick={handleRun}
               disabled={running}
-              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50"
+              className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50"
             >
               {running ? 'Starting...' : 'Run Now'}
             </button>
@@ -263,7 +263,7 @@ function ExecutionCard({ execution, sessions, onJumpToSession }: {
           {linkedSession && (
             <span
               onClick={(e) => { e.stopPropagation(); onJumpToSession(linkedSession); }}
-              className="text-xs px-2 py-0.5 bg-gray-700 text-blue-400 rounded hover:bg-gray-600 transition-colors cursor-pointer flex items-center gap-1"
+              className="text-xs px-2 py-0.5 bg-gray-700 text-claude rounded hover:bg-gray-600 transition-colors cursor-pointer flex items-center gap-1"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />

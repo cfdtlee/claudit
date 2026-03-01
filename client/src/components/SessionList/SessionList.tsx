@@ -4,7 +4,6 @@ import { useUIStore } from '../../stores/useUIStore';
 import { archiveSession as apiArchiveSession, deleteSession as apiDeleteSession } from '../../api/sessions';
 import SearchBar from './SearchBar';
 import ProjectGroup from './ProjectGroup';
-import NewSessionModal from '../NewSessionModal';
 
 interface ContextMenuState {
   x: number;
@@ -35,9 +34,8 @@ export default function SessionList() {
     setArchivedExpanded,
   } = useSessionStore();
 
-  const showNewModal = useUIStore(s => s.showNewModal);
-  const setShowNewModal = useUIStore(s => s.setShowNewModal);
   const selectSession = useUIStore(s => s.selectSession);
+  const clearSelected = useUIStore(s => s.clearSelected);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -228,14 +226,6 @@ export default function SessionList() {
     await refresh();
   }, [selectedIds, sessionLookup, refresh]);
 
-  const handleCreateSession = async (projectPath: string, worktree?: { branchName: string }) => {
-    setShowNewModal(false);
-    const result = await createSession(projectPath, { worktree });
-    if (result) {
-      selectSession(result.projectHash, result.sessionId, result.projectPath);
-    }
-  };
-
   const allExpanded = groups.length > 0 && groups.every(g => expandedSet.has(g.projectHash));
 
   return (
@@ -253,9 +243,9 @@ export default function SessionList() {
             </button>
           </div>
           <button
-            onClick={() => setShowNewModal(true)}
+            onClick={() => clearSelected()}
             disabled={creating}
-            className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors"
+            className="text-xs px-2 py-1 rounded bg-claude hover:bg-claude-hover disabled:opacity-50 text-white transition-colors"
           >
             {creating ? '...' : '+ New'}
           </button>
@@ -283,8 +273,8 @@ export default function SessionList() {
 
       {/* Selection action bar */}
       {selectedIds.size > 0 && (
-        <div className="px-3 py-1.5 bg-blue-900/30 border-b border-blue-800/50 flex items-center gap-2">
-          <span className="text-xs text-blue-300 mr-auto">{selectedIds.size} selected</span>
+        <div className="px-3 py-1.5 bg-claude/10 border-b border-claude/20 flex items-center gap-2">
+          <span className="text-xs text-claude mr-auto">{selectedIds.size} selected</span>
           <button
             onClick={handleBatchArchive}
             className="text-xs px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
@@ -390,13 +380,6 @@ export default function SessionList() {
         </div>
       )}
 
-      {/* New Session Modal */}
-      {showNewModal && (
-        <NewSessionModal
-          onClose={() => setShowNewModal(false)}
-          onCreate={handleCreateSession}
-        />
-      )}
     </div>
   );
 }

@@ -54,7 +54,7 @@ interface PtyEntry {
   exitCode: number | null;
 }
 
-const MAX_SCROLLBACK = 5000;  // max chars to keep for replay
+const MAX_SCROLLBACK = 50000;  // max chars to keep for replay
 const PTY_IDLE_TIMEOUT = 10 * 60 * 1000; // kill orphan PTY after 10 min
 
 const ptyCache = new Map<string, PtyEntry>();
@@ -106,6 +106,29 @@ function appendScrollback(entry: PtyEntry, data: string) {
   }
 }
 
+function detectExternalClaude(sessionId: string): string | null {
+  if (!sessionId) return null;
+
+  // If we have an active PTY for this session, the claude process is ours — skip
+  for (const entry of ptyCache.values()) {
+    if (entry.sessionId === sessionId && !entry.exited) {
+      return null;
+    }
+  }
+
+  // No active PTY from us — check if someone else is using this session
+  try {
+    const output = execSync(
+      `pgrep -af "claude.*--resume.*${sessionId}" 2>/dev/null || true`,
+      { encoding: 'utf-8', timeout: 3000 }
+    ).trim();
+    if (output) {
+      return `Another claude process is already using session ${sessionId}. Memory changes will not be shared between processes.`;
+    }
+  } catch {}
+  return null;
+}
+
 function spawnPty(
   key: string,
   sessionId: string,
@@ -121,7 +144,7 @@ function spawnPty(
     destroyPty(key);
   }
 
-  const args = !isNew && sessionId
+  const args = sessionId
     ? ['--resume', sessionId]
     : [];
 
@@ -189,13 +212,17 @@ function attachWs(entry: PtyEntry, ws: WebSocket) {
     for (const chunk of entry.scrollback) {
       sendData(ws, chunk);
     }
+    sendControl(ws, { type: 'scrollback-end' });
   }
 
   // Tell client we're ready
   if (entry.exited) {
     sendControl(ws, { type: 'exit', exitCode: entry.exitCode, signal: 0 });
   } else {
-    sendControl(ws, { type: 'ready', sessionId: entry.sessionId });
+    const warning = detectExternalClaude(entry.sessionId);
+    const readyMsg: Record<string, any> = { type: 'ready', sessionId: entry.sessionId };
+    if (warning) readyMsg.warning = warning;
+    sendControl(ws, readyMsg);
   }
 }
 

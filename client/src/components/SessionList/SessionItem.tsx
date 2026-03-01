@@ -123,8 +123,8 @@ export default function SessionItem({ session, projectHash, isArchived, multiSel
   return (
     <div
       className={`group relative w-full text-left border-b border-gray-800/50 transition-colors cursor-pointer
-        ${multiSelected ? 'bg-gray-800/70 ring-1 ring-blue-500/30' : ''}
-        ${isSelected && !multiSelected ? 'bg-blue-900/30 border-l-2 border-l-blue-500' : ''}
+        ${multiSelected ? 'bg-gray-800/70 ring-1 ring-claude/30' : ''}
+        ${isSelected && !multiSelected ? 'bg-claude/10 border-l-2 border-l-claude' : ''}
         ${!isSelected && !multiSelected ? 'hover:bg-gray-800/50' : ''}`}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
@@ -140,13 +140,13 @@ export default function SessionItem({ session, projectHash, isArchived, multiSel
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
             onClick={e => e.stopPropagation()}
-            className="w-full text-sm bg-gray-800 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 outline-none focus:border-blue-500"
+            className="w-full text-sm bg-gray-800 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 outline-none focus:border-claude"
           />
         ) : (
           <div className="flex items-center gap-2">
             {statusDot}
             {session.pinned && (
-              <svg className="w-3 h-3 text-blue-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-3 h-3 text-claude flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
               </svg>
             )}

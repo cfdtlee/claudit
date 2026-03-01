@@ -13,7 +13,7 @@ export default function NavSidebar() {
         onClick={() => setView('todo')}
         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
           view === 'todo'
-            ? 'bg-blue-600 text-white'
+            ? 'bg-claude text-white'
             : 'text-gray-400 hover:text-white hover:bg-gray-800'
         }`}
         title="Todos"
@@ -27,7 +27,7 @@ export default function NavSidebar() {
         onClick={() => setView('sessions')}
         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
           view === 'sessions'
-            ? 'bg-blue-600 text-white'
+            ? 'bg-claude text-white'
             : 'text-gray-400 hover:text-white hover:bg-gray-800'
         }`}
         title="Sessions"
@@ -40,7 +40,7 @@ export default function NavSidebar() {
         onClick={() => setView('cron')}
         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
           view === 'cron'
-            ? 'bg-blue-600 text-white'
+            ? 'bg-claude text-white'
             : 'text-gray-400 hover:text-white hover:bg-gray-800'
         }`}
         title="Workflows"

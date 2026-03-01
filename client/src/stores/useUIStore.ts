@@ -21,6 +21,20 @@ interface PendingTodoPrompt {
   prompt: string;
 }
 
+export interface SessionDraft {
+  prompt: string;
+  projectPath: string;
+  useWorktree: boolean;
+  branchName: string;
+}
+
+export interface TodoDraft {
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high';
+  selectedSessionId: string;
+}
+
 interface UIState {
   view: View;
   selected: SelectedSession | null;
@@ -31,6 +45,8 @@ interface UIState {
   pendingTodoPrompt: PendingTodoPrompt | null;
   editingTodoId: string | null;
   editingCronTaskId: string | null;
+  sessionDraft: SessionDraft | null;
+  todoDraft: TodoDraft | null;
 
   setView: (view: View) => void;
   selectSession: (projectHash: string, sessionId: string, projectPath: string, isNew?: boolean) => void;
@@ -42,6 +58,8 @@ interface UIState {
   setPendingTodoPrompt: (data: PendingTodoPrompt | null) => void;
   setEditingTodoId: (id: string | null) => void;
   setEditingCronTaskId: (id: string | null) => void;
+  setSessionDraft: (draft: SessionDraft | null) => void;
+  setTodoDraft: (draft: TodoDraft | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -56,6 +74,8 @@ export const useUIStore = create<UIState>()(
       pendingTodoPrompt: null,
       editingTodoId: null,
       editingCronTaskId: null,
+      sessionDraft: null,
+      todoDraft: null,
 
       setView: (view) => set({ view }),
       selectSession: (projectHash, sessionId, projectPath, isNew) =>
@@ -68,6 +88,8 @@ export const useUIStore = create<UIState>()(
       setPendingTodoPrompt: (data) => set({ pendingTodoPrompt: data }),
       setEditingTodoId: (id) => set({ editingTodoId: id }),
       setEditingCronTaskId: (id) => set({ editingCronTaskId: id }),
+      setSessionDraft: (draft) => set({ sessionDraft: draft }),
+      setTodoDraft: (draft) => set({ todoDraft: draft }),
     }),
     {
       name: 'claudit:ui-state',
@@ -78,6 +100,8 @@ export const useUIStore = create<UIState>()(
         selectedCronTaskId: state.selectedCronTaskId,
         editingTodoId: state.editingTodoId,
         editingCronTaskId: state.editingCronTaskId,
+        sessionDraft: state.sessionDraft,
+        todoDraft: state.todoDraft,
       }),
     },
   ),

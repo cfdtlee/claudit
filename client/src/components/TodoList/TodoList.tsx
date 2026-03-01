@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TodoItem as TodoItemType, TodoGroup, SessionSummary } from '../../types';
-import { fetchTodos, createTodo, updateTodo, reorderTodos } from '../../api/todo';
+import { fetchTodos, updateTodo, reorderTodos } from '../../api/todo';
 import { fetchGroups, createGroup } from '../../api/groups';
 import { fetchSessions } from '../../api/sessions';
 import { useUIStore } from '../../stores/useUIStore';
@@ -17,8 +17,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import TodoItem from './TodoItem';
-import TodoForm from './TodoForm';
-import NewSessionModal from '../NewSessionModal';
 import GroupManager from './GroupManager';
 
 type Filter = 'all' | 'active' | 'done';
@@ -26,7 +24,7 @@ type GroupFilter = 'all' | 'ungrouped' | string; // string = groupId
 
 interface Props {
   selectedTodoId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
 }
 
 export default function TodoList({ selectedTodoId, onSelect }: Props) {
@@ -34,8 +32,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
   const [groups, setGroups] = useState<TodoGroup[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [showNewSessionModal, setShowNewSessionModal] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
@@ -115,9 +111,9 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
   // Watch for session→todo prefill
   useEffect(() => {
     if (todoSessionPrefill) {
-      setShowForm(true);
+      onSelect(null);
     }
-  }, [todoSessionPrefill]);
+  }, [todoSessionPrefill, onSelect]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -126,25 +122,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
     window.addEventListener('click', handler);
     return () => window.removeEventListener('click', handler);
   }, [contextMenu]);
-
-  const handleCreate = async (data: {
-    title: string;
-    description?: string;
-    priority: 'low' | 'medium' | 'high';
-    sessionId?: string;
-    sessionLabel?: string;
-  }) => {
-    try {
-      const groupId = groupFilter !== 'all' && groupFilter !== 'ungrouped' ? groupFilter : undefined;
-      const todo = await createTodo({ ...data, groupId });
-      setTodos(prev => [...prev, todo]);
-      setShowForm(false);
-      setTodoSessionPrefill(null);
-      onSelect(todo.id);
-    } catch (err) {
-      console.error('Failed to create todo:', err);
-    }
-  };
 
   const handleToggle = async (todo: TodoItemType) => {
     try {
@@ -156,16 +133,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
     } catch (err) {
       console.error('Failed to toggle todo:', err);
     }
-  };
-
-  const handleCancelForm = () => {
-    setShowForm(false);
-    setTodoSessionPrefill(null);
-  };
-
-  const handleNewSessionCreated = async (_projectPath: string) => {
-    setShowNewSessionModal(false);
-    await loadSessions();
   };
 
   const handleSelect = (todoId: string, e: React.MouseEvent) => {
@@ -284,7 +251,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
       if (groupFilter === 'ungrouped' && t.groupId) return false;
       if (groupFilter !== 'all' && groupFilter !== 'ungrouped' && t.groupId !== groupFilter) return false;
       return true;
-    });
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
   const filtered = getFilteredTodos();
@@ -318,10 +285,10 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
         <h2 className="text-lg font-semibold text-gray-200">Todos</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setShowForm(!showForm); if (showForm) setTodoSessionPrefill(null); }}
-            className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+            onClick={() => onSelect(null)}
+            className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors"
           >
-            {showForm ? 'Cancel' : '+ New'}
+            + New
           </button>
         </div>
       </div>
@@ -334,7 +301,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
             onClick={() => setFilter(f)}
             className={`text-xs px-3 py-1 rounded-full capitalize transition-colors ${
               filter === f
-                ? 'bg-blue-600 text-white'
+                ? 'bg-claude text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
@@ -349,7 +316,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
           <button
             onClick={() => setGroupFilter('all')}
             className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-              groupFilter === 'all' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              groupFilter === 'all' ? 'bg-claude text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
             All
@@ -357,7 +324,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
           <button
             onClick={() => setGroupFilter('ungrouped')}
             className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-              groupFilter === 'ungrouped' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              groupFilter === 'ungrouped' ? 'bg-claude text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
             Ungrouped
@@ -371,7 +338,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
                 // Right-click on group pill handled by GroupManager
               }}
               className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-                groupFilter === g.id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                groupFilter === g.id ? 'bg-claude text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
               }`}
             >
               {g.name}
@@ -399,18 +366,6 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
               Close
             </button>
           )}
-        </div>
-      )}
-
-      {showForm && (
-        <div className="p-4 border-b border-gray-800 bg-gray-900/50">
-          <TodoForm
-            sessions={sessions}
-            prefillSessionId={todoSessionPrefill?.sessionId}
-            onSubmit={handleCreate}
-            onCancel={handleCancelForm}
-            onCreateSession={() => setShowNewSessionModal(true)}
-          />
         </div>
       )}
 
@@ -522,11 +477,11 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
                   }}
                   autoFocus
                   placeholder="Group name..."
-                  className="flex-1 text-xs bg-gray-900 text-gray-200 px-2 py-1 rounded border border-gray-600 outline-none focus:border-blue-500"
+                  className="flex-1 text-xs bg-gray-900 text-gray-200 px-2 py-1 rounded border border-gray-600 outline-none focus:border-claude"
                 />
                 <button
                   onClick={handleCreateGroupFromContext}
-                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-500"
+                  className="text-xs px-2 py-1 bg-claude text-white rounded hover:bg-claude-hover"
                 >
                   OK
                 </button>
@@ -534,20 +489,13 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
             ) : (
               <button
                 onClick={() => setShowNewGroupInput(true)}
-                className="w-full text-left px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-700 transition-colors"
+                className="w-full text-left px-3 py-1.5 text-xs text-claude hover:bg-gray-700 transition-colors"
               >
                 Create new group...
               </button>
             )}
           </div>
         </div>
-      )}
-
-      {showNewSessionModal && (
-        <NewSessionModal
-          onClose={() => setShowNewSessionModal(false)}
-          onCreate={handleNewSessionCreated}
-        />
       )}
 
     </div>

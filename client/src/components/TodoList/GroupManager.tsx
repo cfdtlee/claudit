@@ -56,12 +56,12 @@ export default function GroupManager({ groups, onGroupsChanged }: Props) {
           onChange={e => setNewName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
           placeholder="New group name..."
-          className="flex-1 text-xs bg-gray-800 text-gray-200 px-2 py-1 rounded border border-gray-600 outline-none focus:border-blue-500"
+          className="flex-1 text-xs bg-gray-800 text-gray-200 px-2 py-1 rounded border border-gray-600 outline-none focus:border-claude"
         />
         <button
           onClick={handleCreate}
           disabled={creating || !newName.trim()}
-          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
+          className="text-xs px-2 py-1 bg-claude text-white rounded hover:bg-claude-hover disabled:opacity-50"
         >
           Add
         </button>
@@ -78,9 +78,9 @@ export default function GroupManager({ groups, onGroupsChanged }: Props) {
                   if (e.key === 'Escape') setEditingId(null);
                 }}
                 autoFocus
-                className="flex-1 bg-gray-800 text-gray-200 px-2 py-1 rounded border border-gray-600 outline-none focus:border-blue-500"
+                className="flex-1 bg-gray-800 text-gray-200 px-2 py-1 rounded border border-gray-600 outline-none focus:border-claude"
               />
-              <button onClick={() => handleRename(g.id)} className="text-blue-400 hover:text-blue-300">Save</button>
+              <button onClick={() => handleRename(g.id)} className="text-claude hover:text-blue-300">Save</button>
               <button onClick={() => setEditingId(null)} className="text-gray-500 hover:text-gray-300">Cancel</button>
             </>
           ) : (

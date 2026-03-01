@@ -19,9 +19,10 @@ const priorityLabels = {
 interface Props {
   todoId: string | null;
   onTodoDeleted: () => void;
+  onTodoCreated?: (id: string) => void;
 }
 
-export default function TodoDetail({ todoId, onTodoDeleted }: Props) {
+export default function TodoDetail({ todoId, onTodoDeleted, onTodoCreated }: Props) {
   const [todo, setTodo] = useState<TodoItem | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [showClaudeItModal, setShowClaudeItModal] = useState(false);
@@ -66,7 +67,7 @@ export default function TodoDetail({ todoId, onTodoDeleted }: Props) {
   }, [loadTodo, loadSessions]);
 
   if (!todoId) {
-    return <TodoEmptyState />;
+    return <TodoEmptyState onTodoCreated={onTodoCreated ?? (() => {})} />;
   }
 
   if (!todo) {
@@ -190,7 +191,7 @@ export default function TodoDetail({ todoId, onTodoDeleted }: Props) {
               onClick={handleToggle}
               className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
                 todo.completed
-                  ? 'bg-blue-600 border-blue-600'
+                  ? 'bg-claude border-claude'
                   : 'border-gray-500 hover:border-gray-300'
               }`}
             >
@@ -211,7 +212,7 @@ export default function TodoDetail({ todoId, onTodoDeleted }: Props) {
               <button
                 onClick={() => setShowClaudeItModal(true)}
                 disabled={claudeItLoading}
-                className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {claudeItLoading ? (
                   <>
@@ -292,7 +293,7 @@ export default function TodoDetail({ todoId, onTodoDeleted }: Props) {
                           selectSession(linkedSession.projectHash, linkedSession.sessionId, linkedSession.projectPath);
                           setView('sessions');
                         }}
-                        className="text-xs px-2 py-1 bg-gray-700 text-blue-400 rounded hover:bg-gray-600 transition-colors flex items-center gap-1"
+                        className="text-xs px-2 py-1 bg-gray-700 text-claude rounded hover:bg-gray-600 transition-colors flex items-center gap-1"
                       >
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />

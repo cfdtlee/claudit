@@ -47,13 +47,13 @@ export default function TodoItem({ todo, selected, multiSelected, sessionStatus,
       onContextMenu={onContextMenu}
       className={`px-4 py-3 border-b border-gray-800 cursor-pointer transition-colors flex items-start gap-3 ${
         selected ? 'bg-gray-800' : multiSelected ? 'bg-gray-800/70' : 'hover:bg-gray-800/50'
-      }${multiSelected ? ' ring-1 ring-blue-500/30' : ''}`}
+      }${multiSelected ? ' ring-1 ring-claude/30' : ''}`}
     >
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
         className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
           todo.completed
-            ? 'bg-blue-600 border-blue-600'
+            ? 'bg-claude border-claude'
             : 'border-gray-500 hover:border-gray-300'
         }`}
       >

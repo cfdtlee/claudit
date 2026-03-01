@@ -113,7 +113,7 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             onClick={() => setPreset(p.key)}
             className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
               preset === p.key
-                ? 'bg-blue-600 text-white'
+                ? 'bg-claude text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
           >
@@ -130,7 +130,7 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             <select
               value={minutes}
               onChange={e => setMinutes(parseInt(e.target.value))}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
             >
               {[1, 2, 5, 10, 15, 20, 30, 45, 60].map(n => (
                 <option key={n} value={n}>{n}</option>
@@ -146,7 +146,7 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             <select
               value={minute}
               onChange={e => setMinute(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
             >
               {[0, 5, 10, 15, 20, 30, 45].map(n => (
                 <option key={n} value={n}>{`:${String(n).padStart(2, '0')}`}</option>
@@ -167,7 +167,7 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
                 setHour(String(parseInt(h)));
                 setMinute(String(parseInt(m)));
               }}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
             />
           </>
         )}
@@ -178,7 +178,7 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             <select
               value={weekday}
               onChange={e => setWeekday(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
             >
               <option value="1-5">Weekdays (Mon-Fri)</option>
               <option value="0,6">Weekends</option>
@@ -199,7 +199,7 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             type="text"
             value={customExpr}
             onChange={e => setCustomExpr(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-blue-500"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-claude"
             placeholder="*/30 * * * *"
           />
         )}
