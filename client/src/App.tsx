@@ -31,18 +31,20 @@ export default function App() {
     return () => disconnectEventStream();
   }, [connectEventStream, disconnectEventStream]);
 
-  // Global keyboard shortcuts: Cmd+K (search), Alt+N (new item)
+  // Global keyboard shortcuts: Cmd+K (search), Cmd+N (new item)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+
       // Cmd/Ctrl+K — focus search
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (e.key === 'k') {
         e.preventDefault();
         const input = document.querySelector('[data-search-input]') as HTMLInputElement;
         input?.focus();
       }
 
-      // Alt/Option+N — new item in current view
-      if (e.altKey && e.key === 'n') {
+      // Cmd/Ctrl+N — new item in current view
+      if (e.key === 'n' && !e.shiftKey) {
         e.preventDefault();
         const currentView = useUIStore.getState().view;
         if (currentView === 'sessions') {
