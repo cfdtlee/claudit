@@ -121,6 +121,8 @@ export default function App() {
           sessionId={selected.sessionId}
           projectPath={selected.projectPath}
           isNew={selected.isNew}
+          slug={selected.slug}
+          slugSessionIds={selected.slugSessionIds}
         />
       ) : (
         <EmptyState onCreateSession={handleCreateFromEmpty} />

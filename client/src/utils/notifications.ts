@@ -30,7 +30,7 @@ export function checkForAttentionTransitions(groups: { sessions: SessionSummary[
   for (const g of groups) {
     for (const s of g.sessions) {
       const prev = prevStatusMap.get(s.sessionId);
-      if (s.status === 'need_attention' && prev !== undefined && prev !== 'need_attention') {
+      if (s.status === 'done' && prev !== undefined && prev !== 'done') {
         showSessionNotification(s);
       }
       prevStatusMap.set(s.sessionId, s.status);

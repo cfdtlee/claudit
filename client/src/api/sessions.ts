@@ -1,4 +1,4 @@
-import { ProjectGroup, SessionDetail } from '../types';
+import { ProjectGroup, SessionDetail, MergedSessionDetail } from '../types';
 
 export interface ArchivedResponse {
   count: number;
@@ -47,6 +47,15 @@ export async function fetchSessionDetail(
 ): Promise<SessionDetail> {
   const res = await fetch(`/api/sessions/${encodeURIComponent(projectHash)}/${encodeURIComponent(sessionId)}`);
   if (!res.ok) throw new Error('Failed to fetch session detail');
+  return res.json();
+}
+
+export async function fetchMergedSessionDetail(
+  projectHash: string,
+  slug: string
+): Promise<MergedSessionDetail> {
+  const res = await fetch(`/api/sessions/merged/${encodeURIComponent(projectHash)}/${encodeURIComponent(slug)}`);
+  if (!res.ok) throw new Error('Failed to fetch merged session detail');
   return res.json();
 }
 
@@ -108,6 +117,16 @@ export async function archiveSession(
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Failed to archive session' }));
     throw new Error(err.error || 'Failed to archive session');
+  }
+}
+
+export async function markSessionSeen(sessionId: string): Promise<void> {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/seen`, {
+    method: 'PATCH',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to mark session seen' }));
+    throw new Error(err.error || 'Failed to mark session seen');
   }
 }
 

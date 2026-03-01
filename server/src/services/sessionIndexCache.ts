@@ -10,7 +10,10 @@ export interface CachedSessionData {
   timestamp: number;
   messageCount: number;
   lastRecordType: 'user' | 'assistant' | null;
+  lastRecordIsEndTurn: boolean;
   fileMtime: number;
+  lastViewedMtime: number;
+  slug?: string;
 }
 
 interface IndexData {
@@ -26,6 +29,15 @@ export function getSessionCache(): Record<string, CachedSessionData> {
 
 export function setSessionCache(sessions: Record<string, CachedSessionData>): void {
   indexStore.write({ sessions });
+}
+
+export function updateLastViewedMtime(sessionId: string, mtime: number): void {
+  const data = indexStore.read();
+  const cached = data.sessions[sessionId];
+  if (cached) {
+    data.sessions[sessionId] = { ...cached, lastViewedMtime: mtime };
+    indexStore.write(data);
+  }
 }
 
 export function isSessionStale(

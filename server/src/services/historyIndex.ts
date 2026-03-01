@@ -1,6 +1,8 @@
-import { ProjectGroup } from '../types.js';
+import { ProjectGroup, SessionSummary } from '../types.js';
 import { getManagedSessionMap, getArchivedSessionIds, getPinnedSessionIds } from './managedSessions.js';
-import { scanProjectSessions } from './sessionScanner.js';
+import { scanProjectSessions, getLastRecordState } from './sessionScanner.js';
+import path from 'path';
+import os from 'os';
 
 // Optional: node-pty may not be available
 let getActivePtySessions: () => ReadonlySet<string> = () => new Set();
@@ -17,6 +19,56 @@ export function invalidateSessionCache(): void {
   cache = null;
 }
 
+/** Merge sessions that share the same slug within a project */
+function mergeBySlug(summaries: SessionSummary[]): SessionSummary[] {
+  const slugGroups = new Map<string, SessionSummary[]>();
+  const result: SessionSummary[] = [];
+
+  for (const s of summaries) {
+    if (!s.slug) {
+      result.push(s);
+      continue;
+    }
+    const key = `${s.projectHash}::${s.slug}`;
+    let group = slugGroups.get(key);
+    if (!group) {
+      group = [];
+      slugGroups.set(key, group);
+    }
+    group.push(s);
+  }
+
+  for (const group of slugGroups.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+      continue;
+    }
+
+    // Sort by timestamp ascending to find earliest and latest
+    group.sort((a, b) => a.timestamp - b.timestamp);
+    const earliest = group[0];
+    const latest = group[group.length - 1];
+    const allIds = group.map(s => s.sessionId);
+
+    result.push({
+      sessionId: latest.sessionId,
+      projectPath: latest.projectPath,
+      projectHash: latest.projectHash,
+      lastMessage: earliest.lastMessage,
+      timestamp: latest.timestamp,
+      messageCount: group.reduce((sum, s) => sum + s.messageCount, 0),
+      displayName: earliest.displayName || latest.displayName,
+      status: latest.status,
+      pinned: group.some(s => s.pinned),
+      slug: latest.slug,
+      slugPartCount: group.length,
+      slugSessionIds: allIds,
+    });
+  }
+
+  return result;
+}
+
 /** Get sessions grouped by project, with optional search filter */
 export function getSessionIndex(
   query?: string,
@@ -25,10 +77,11 @@ export function getSessionIndex(
   includeArchived?: boolean,
 ): ProjectGroup[] {
   if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
-    return filterGroups(overlayRunningStatus(cache.data), query, hideEmpty, managedOnly, includeArchived);
+    return filterGroups(overlayPinnedStatus(overlayRunningStatus(cache.data)), query, hideEmpty, managedOnly, includeArchived);
   }
 
-  const summaries = scanProjectSessions();
+  const rawSummaries = scanProjectSessions();
+  const summaries = mergeBySlug(rawSummaries);
 
   // Group by project
   const groupMap = new Map<string, ProjectGroup>();
@@ -58,15 +111,31 @@ export function getSessionIndex(
   return filterGroups(overlayPinnedStatus(overlayRunningStatus(groups)), query, hideEmpty, managedOnly, includeArchived);
 }
 
-/** Overlay running status from active PTY sessions (not cached) */
+/** Overlay running/done status from active PTY sessions (not cached) */
 function overlayRunningStatus(groups: ProjectGroup[]): ProjectGroup[] {
   const active = getActivePtySessions();
   if (active.size === 0) return groups;
+  const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
   return groups.map(g => ({
     ...g,
-    sessions: g.sessions.map(s =>
-      active.has(s.sessionId) ? { ...s, status: 'running' as const } : s
-    ),
+    sessions: g.sessions.map(s => {
+      // For merged sessions, check all constituent session IDs
+      const idsToCheck = s.slugSessionIds || [s.sessionId];
+      const hasPty = idsToCheck.some(id => active.has(id));
+      if (!hasPty) return s;
+
+      // PTY is active — check if Claude has finished its turn
+      const sessionFile = path.join(PROJECTS_DIR, s.projectHash, `${s.sessionId}.jsonl`);
+      try {
+        const lastState = getLastRecordState(sessionFile);
+        if (lastState.type === 'assistant' && lastState.isEndTurn) {
+          return { ...s, status: 'done' as const };
+        }
+      } catch {
+        // fall through to running
+      }
+      return { ...s, status: 'running' as const };
+    }),
   }));
 }
 
@@ -105,10 +174,12 @@ function filterGroups(
     .map(g => ({
       ...g,
       sessions: g.sessions.filter(s => {
+        const idsToCheck = s.slugSessionIds || [s.sessionId];
+        const allArchived = idsToCheck.every(id => archivedIds.has(id));
         if (includeArchived) {
-          if (!archivedIds.has(s.sessionId)) return false;
+          if (!allArchived) return false;
         } else {
-          if (archivedIds.has(s.sessionId)) return false;
+          if (allArchived && archivedIds.has(s.sessionId)) return false;
         }
         if (hideEmpty && s.messageCount === 0) return false;
         if (managedSet && !managedSet.has(s.sessionId)) return false;

@@ -1,11 +1,11 @@
-export type StatusType = 'running' | 'success' | 'error' | 'warning' | 'idle' | 'enabled' | 'disabled' | 'need_attention' | 'synced' | 'local_modified' | 'sync_error';
+export type StatusType = 'running' | 'success' | 'error' | 'warning' | 'idle' | 'enabled' | 'disabled' | 'done' | 'synced' | 'local_modified' | 'sync_error';
 
 const statusStyles: Record<StatusType, { dot: string; text: string; bg: string; label: string }> = {
   running:        { dot: 'bg-green-500',  text: 'text-green-400',  bg: 'bg-green-900/30',  label: 'Running' },
   success:        { dot: 'bg-green-500',  text: 'text-green-400',  bg: 'bg-green-900/30',  label: 'Success' },
   error:          { dot: 'bg-red-500',    text: 'text-red-400',    bg: 'bg-red-900/30',    label: 'Error' },
   warning:        { dot: 'bg-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-900/30', label: 'Warning' },
-  need_attention: { dot: 'bg-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-900/30', label: 'Needs Attention' },
+  done:           { dot: 'bg-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-900/30', label: 'Done' },
   idle:           { dot: 'bg-gray-500',   text: 'text-gray-400',   bg: 'bg-gray-700',      label: 'Idle' },
   enabled:        { dot: 'bg-green-500',  text: 'text-green-400',  bg: 'bg-green-900/30',  label: 'ON' },
   disabled:       { dot: 'bg-gray-500',   text: 'text-gray-400',   bg: 'bg-gray-700',      label: 'OFF' },

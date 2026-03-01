@@ -68,6 +68,39 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // Handle image paste — upload to server and write file path to PTY
+    const pasteHandler = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (!blob) return;
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = (reader.result as string).split(',')[1];
+            try {
+              const resp = await fetch('/api/filesystem/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: base64, mimeType: item.type }),
+              });
+              const result = await resp.json();
+              if (result.path && wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'input', data: result.path }));
+              }
+            } catch (err) {
+              console.error('Image paste upload failed:', err);
+            }
+          };
+          reader.readAsDataURL(blob);
+          return; // handle first image only
+        }
+      }
+    };
+    containerRef.current.addEventListener('paste', pasteHandler);
+
     // Connect WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`);
@@ -94,6 +127,14 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
         switch (ctrl.type) {
           case 'ready':
             setStatus('connected');
+            // Show warning if another claude process is using this session
+            if (ctrl.warning) {
+              term.writeln('\x1b[33m⚠ ' + ctrl.warning + '\x1b[0m');
+            }
+            setTimeout(() => {
+              fitAddonRef.current?.fit();
+              termRef.current?.scrollToBottom();
+            }, 50);
             // Pre-fill pending todo prompt (no Enter — user reviews and submits)
             {
               const pending = useUIStore.getState().pendingTodoPrompt;
@@ -106,6 +147,10 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
                 }, 1500);
               }
             }
+            break;
+          case 'scrollback-end':
+            fitAddonRef.current?.fit();
+            termRef.current?.scrollToBottom();
             break;
           case 'exit':
             setStatus('exited');
@@ -166,6 +211,7 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
       clearTimeout(resizeTimer);
       observer.disconnect();
       inputDisposable.dispose();
+      containerRef.current?.removeEventListener('paste', pasteHandler);
       ws.close();
       wsRef.current = null;
       term.dispose();

@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import { WebSocket } from 'ws';
+import { eventBus } from './eventBus.js';
 
 // node-pty is optional — dynamically loaded
 let pty: typeof import('node-pty') | null = null;
@@ -181,6 +182,12 @@ function spawnPty(
     activePtySessions.delete(sessionId);
     if (entry.attachedWs) {
       sendControl(entry.attachedWs, { type: 'exit', exitCode, signal });
+    }
+    // Invalidate cache + notify clients so status updates to 'done'
+    // Lazy import to avoid circular dependency (historyIndex → ptyManager → historyIndex)
+    import('./historyIndex.js').then(m => m.invalidateSessionCache()).catch(() => {});
+    if (sessionId) {
+      eventBus.emitSessionEvent({ type: 'session:updated', sessionId });
     }
     // Clean up after a delay so client can still see exit message
     setTimeout(() => {

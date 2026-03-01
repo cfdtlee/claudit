@@ -89,4 +89,48 @@ router.get('/list', (req, res) => {
   }
 });
 
+// POST /api/filesystem/upload — receive base64 image data, write to temp file
+router.post('/upload', (req, res) => {
+  try {
+    const { data, mimeType } = req.body as { data?: string; mimeType?: string };
+    if (!data || !mimeType || !mimeType.startsWith('image/')) {
+      res.status(400).json({ error: 'Missing or invalid data/mimeType' });
+      return;
+    }
+
+    const extMap: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/bmp': 'bmp',
+    };
+    const ext = extMap[mimeType] || 'png';
+
+    const uploadDir = path.join(os.homedir(), '.claudit', 'uploads');
+    fs.mkdirSync(uploadDir, { recursive: true });
+
+    // Clean up files older than 1 hour
+    try {
+      const now = Date.now();
+      for (const f of fs.readdirSync(uploadDir)) {
+        const fp = path.join(uploadDir, f);
+        const stat = fs.statSync(fp);
+        if (now - stat.mtimeMs > 3600_000) {
+          fs.unlinkSync(fp);
+        }
+      }
+    } catch {}
+
+    const filename = `paste-${Date.now()}.${ext}`;
+    const filePath = path.join(uploadDir, filename);
+    fs.writeFileSync(filePath, Buffer.from(data, 'base64'));
+
+    res.json({ path: filePath });
+  } catch (err: any) {
+    console.error('Error uploading file:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload file' });
+  }
+});
+
 export default router;

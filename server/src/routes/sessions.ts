@@ -13,8 +13,11 @@ const CLAUDE_BIN = (() => {
 })();
 import { getSessionIndex, invalidateSessionCache } from '../services/historyIndex.js';
 import { parseSession } from '../services/sessionParser.js';
+import { getSlugFromSession } from '../services/sessionScanner.js';
+import { MergedSessionDetail } from '../types.js';
 import { addManagedSession, renameManagedSession, archiveManagedSession, removeManagedSession, pinManagedSession } from '../services/managedSessions.js';
 import { eventBus } from '../services/eventBus.js';
+import { updateLastViewedMtime } from '../services/sessionIndexCache.js';
 
 const router = Router();
 
@@ -219,6 +222,39 @@ router.get('/archived', (req, res) => {
   }
 });
 
+// PATCH /api/sessions/:sessionId/seen — mark session as viewed
+router.patch('/:sessionId/seen', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Find the session's JSONL file to read its current mtime
+    const projectDirs = fs.readdirSync(path.join(os.homedir(), '.claude', 'projects'), { withFileTypes: true });
+    let found = false;
+    for (const dir of projectDirs) {
+      if (!dir.isDirectory()) continue;
+      const filePath = path.join(os.homedir(), '.claude', 'projects', dir.name, `${sessionId}.jsonl`);
+      if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath);
+        updateLastViewedMtime(sessionId, stat.mtimeMs);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    invalidateSessionCache();
+    eventBus.emitSessionEvent({ type: 'session:updated', sessionId });
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('Error marking session seen:', err);
+    res.status(500).json({ error: err.message || 'Failed to mark session seen' });
+  }
+});
+
 // PATCH /api/sessions/:sessionId/pin — pin or unpin a session
 router.patch('/:sessionId/pin', (req, res) => {
   try {
@@ -283,6 +319,78 @@ router.patch('/:sessionId/name', (req, res) => {
   } catch (err: any) {
     console.error('Error renaming session:', err);
     res.status(500).json({ error: err.message || 'Failed to rename session' });
+  }
+});
+
+// GET /api/sessions/merged/:projectHash/:slug — merged conversation from all sessions sharing this slug
+router.get('/merged/:projectHash/:slug', (req, res) => {
+  try {
+    const { projectHash, slug } = req.params;
+    const projectDir = path.join(os.homedir(), '.claude', 'projects', projectHash);
+
+    if (!fs.existsSync(projectDir)) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    // Find all session files with this slug
+    const files = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
+    const matchingFiles: { sessionId: string; filePath: string }[] = [];
+
+    for (const file of files) {
+      const filePath = path.join(projectDir, file);
+      const fileSlug = getSlugFromSession(filePath);
+      if (fileSlug === slug) {
+        matchingFiles.push({ sessionId: file.replace('.jsonl', ''), filePath });
+      }
+    }
+
+    if (matchingFiles.length === 0) {
+      res.status(404).json({ error: 'No sessions found with this slug' });
+      return;
+    }
+
+    // Parse each session
+    const parsed = matchingFiles.map(({ sessionId }) => {
+      const detail = parseSession(projectHash, sessionId);
+      return { sessionId, detail };
+    });
+
+    // Sort by first message timestamp (chronological order)
+    parsed.sort((a, b) => {
+      const aTs = a.detail.messages[0]?.timestamp || '';
+      const bTs = b.detail.messages[0]?.timestamp || '';
+      return aTs.localeCompare(bTs);
+    });
+
+    // Concatenate
+    const allMessages: MergedSessionDetail['messages'] = [];
+    const sessionBoundaries: number[] = [];
+    const sessionIds: string[] = [];
+    let projectPath = projectHash;
+
+    for (const { sessionId, detail } of parsed) {
+      sessionIds.push(sessionId);
+      sessionBoundaries.push(allMessages.length);
+      allMessages.push(...detail.messages);
+      if (detail.projectPath !== projectHash) {
+        projectPath = detail.projectPath;
+      }
+    }
+
+    const result: MergedSessionDetail = {
+      slug,
+      projectPath,
+      sessionIds,
+      latestSessionId: sessionIds[sessionIds.length - 1],
+      messages: allMessages,
+      sessionBoundaries,
+    };
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Error fetching merged session:', err);
+    res.status(500).json({ error: 'Failed to fetch merged session' });
   }
 });
 

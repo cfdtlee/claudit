@@ -8,6 +8,8 @@ interface SelectedSession {
   sessionId: string;
   projectPath: string;
   isNew?: boolean;
+  slug?: string;
+  slugSessionIds?: string[];
 }
 
 interface TodoSessionPrefill {
@@ -49,7 +51,7 @@ interface UIState {
   todoDraft: TodoDraft | null;
 
   setView: (view: View) => void;
-  selectSession: (projectHash: string, sessionId: string, projectPath: string, isNew?: boolean) => void;
+  selectSession: (projectHash: string, sessionId: string, projectPath: string, isNew?: boolean, slug?: string, slugSessionIds?: string[]) => void;
   clearSelected: () => void;
   setSelectedCronTaskId: (id: string | null) => void;
   setSelectedTodoId: (id: string | null) => void;
@@ -78,8 +80,8 @@ export const useUIStore = create<UIState>()(
       todoDraft: null,
 
       setView: (view) => set({ view }),
-      selectSession: (projectHash, sessionId, projectPath, isNew) =>
-        set({ selected: { projectHash, sessionId, projectPath, isNew } }),
+      selectSession: (projectHash, sessionId, projectPath, isNew, slug, slugSessionIds) =>
+        set({ selected: { projectHash, sessionId, projectPath, isNew, slug, slugSessionIds } }),
       clearSelected: () => set({ selected: null }),
       setSelectedCronTaskId: (id) => set({ selectedCronTaskId: id }),
       setSelectedTodoId: (id) => set({ selectedTodoId: id }),

@@ -32,6 +32,7 @@ interface SessionState {
   _initializedExpanded: boolean;
   _eventWs: WebSocket | null;
   _reconnectTimer: ReturnType<typeof setTimeout> | null;
+  _runningPollTimer: ReturnType<typeof setInterval> | null;
 
   // Actions
   fetchSessions: (q?: string) => Promise<void>;
@@ -73,6 +74,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   _initializedExpanded: false,
   _eventWs: null,
   _reconnectTimer: null,
+  _runningPollTimer: null,
 
   fetchSessions: async (q?: string) => {
     try {
@@ -91,6 +93,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         }
         return newState;
       });
+
+      // Start/stop polling based on whether any session is running
+      const hasRunning = data.some(g => g.sessions.some(s => s.status === 'running'));
+      const { _runningPollTimer } = get();
+      if (hasRunning && !_runningPollTimer) {
+        const timer = setInterval(() => {
+          get().fetchSessions(get().query || undefined);
+        }, 5000);
+        set({ _runningPollTimer: timer });
+      } else if (!hasRunning && _runningPollTimer) {
+        clearInterval(_runningPollTimer);
+        set({ _runningPollTimer: null });
+      }
     } catch (e: any) {
       set({ error: e.message, loading: false });
     }
@@ -261,9 +276,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   disconnectEventStream: () => {
-    const { _eventWs, _reconnectTimer } = get();
+    const { _eventWs, _reconnectTimer, _runningPollTimer } = get();
     if (_reconnectTimer) clearTimeout(_reconnectTimer);
+    if (_runningPollTimer) clearInterval(_runningPollTimer);
     if (_eventWs) _eventWs.close();
-    set({ _eventWs: null, _reconnectTimer: null });
+    set({ _eventWs: null, _reconnectTimer: null, _runningPollTimer: null });
   },
 }));

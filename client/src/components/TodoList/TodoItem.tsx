@@ -13,7 +13,7 @@ interface Props {
   todo: TodoItemType;
   selected: boolean;
   multiSelected?: boolean;
-  sessionStatus?: 'idle' | 'running' | 'need_attention';
+  sessionStatus?: 'idle' | 'running' | 'done';
   onSelect: (e: React.MouseEvent) => void;
   onToggle: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;

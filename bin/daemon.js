@@ -53,7 +53,8 @@ export function startDaemon(clauditScript) {
   const existingPid = readPid();
   if (existingPid && isProcessRunning(existingPid)) {
     console.log(`Claudit is already running (PID ${existingPid})`);
-    return;
+    openBrowser(process.env.PORT || DEFAULT_PORT);
+    return Promise.resolve();
   }
 
   const logFd = openSync(LOG_FILE, 'a');
@@ -71,7 +72,12 @@ export function startDaemon(clauditScript) {
   console.log(`Log file: ${LOG_FILE}`);
 
   // Wait briefly for server to start, then open browser
-  setTimeout(() => openBrowser(port), 1500);
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      openBrowser(port);
+      resolve();
+    }, 1500);
+  });
 }
 
 function fetchSessions(port) {

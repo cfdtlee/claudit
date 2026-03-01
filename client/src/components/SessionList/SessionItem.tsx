@@ -64,7 +64,7 @@ export default function SessionItem({ session, projectHash, isArchived, multiSel
     if (onMultiClick) {
       onMultiClick(e, session.sessionId);
     } else {
-      selectSession(projectHash, session.sessionId, session.projectPath);
+      selectSession(projectHash, session.sessionId, session.projectPath, undefined, session.slug, session.slugSessionIds);
     }
   };
 
@@ -111,10 +111,9 @@ export default function SessionItem({ session, projectHash, isArchived, multiSel
 
   const statusEmoji = (() => {
     switch (session.status) {
-      case 'running': return '🏃';
-      case 'need_attention': return '🔔';
-      default: // idle
-        return session.messageCount > 0 ? '👍' : null;
+      case 'running': return '\u{1F3C3}';
+      case 'done': return '\u{1F514}';
+      default: return null; // idle — no indicator
     }
   })();
 

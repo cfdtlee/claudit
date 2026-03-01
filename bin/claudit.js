@@ -14,7 +14,7 @@ const rootDir = join(__dirname, '..');
 const cmd = process.argv[2];
 
 if (cmd === 'start') {
-  startDaemon(__filename);
+  await startDaemon(__filename);
   process.exit(0);
 }
 

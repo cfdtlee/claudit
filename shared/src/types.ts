@@ -8,8 +8,11 @@ export interface SessionSummary {
   timestamp: number;
   messageCount: number;
   displayName?: string;
-  status: 'idle' | 'running' | 'need_attention';
+  status: 'idle' | 'running' | 'done';
   pinned?: boolean;
+  slug?: string;
+  slugPartCount?: number;
+  slugSessionIds?: string[];
 }
 
 export interface ProjectGroup {
@@ -44,6 +47,16 @@ export interface SessionDetail {
   sessionId: string;
   projectPath: string;
   messages: ParsedMessage[];
+  slug?: string;
+}
+
+export interface MergedSessionDetail {
+  slug: string;
+  projectPath: string;
+  sessionIds: string[];
+  latestSessionId: string;
+  messages: ParsedMessage[];
+  sessionBoundaries: number[];
 }
 
 // --- Cron Task Types ---

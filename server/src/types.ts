@@ -5,6 +5,7 @@ export type {
   ContentBlock,
   ParsedMessage,
   SessionDetail,
+  MergedSessionDetail,
   CronTask,
   CronExecution,
   TodoGroup,

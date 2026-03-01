@@ -11,6 +11,7 @@ interface RawRecord {
   timestamp?: string;
   sessionId?: string;
   cwd?: string;
+  slug?: string;
   isMeta?: boolean;
   userType?: string;
   message?: {
@@ -51,6 +52,7 @@ export function parseSession(projectHash: string, sessionId: string): SessionDet
   const messagesById = new Map<string, ParsedMessage>();
   const orderedMessages: ParsedMessage[] = [];
   let projectPath = projectHash;
+  let slug: string | undefined;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -65,6 +67,11 @@ export function parseSession(projectHash: string, sessionId: string): SessionDet
     // Capture project path from first record with cwd
     if (record.cwd && projectPath === projectHash) {
       projectPath = record.cwd;
+    }
+
+    // Capture slug
+    if (record.slug && !slug) {
+      slug = record.slug;
     }
 
     // Skip non-message records
@@ -116,5 +123,6 @@ export function parseSession(projectHash: string, sessionId: string): SessionDet
     sessionId,
     projectPath,
     messages: orderedMessages,
+    slug,
   };
 }

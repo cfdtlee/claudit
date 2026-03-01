@@ -112,18 +112,68 @@ export function countMessages(sessionFile: string): number {
   }
 }
 
-/** Read from end of file to find last user/assistant record type */
-export function getLastSignificantRecordType(sessionFile: string): 'user' | 'assistant' | null {
+export interface LastRecordState {
+  type: 'user' | 'assistant' | null;
+  isEndTurn: boolean; // assistant with stop_reason "end_turn" and no pending tool_use
+}
+
+/** Read tail of file (~4KB) to find last user/assistant record state */
+export function getLastRecordState(sessionFile: string): LastRecordState {
+  const result: LastRecordState = { type: null, isEndTurn: false };
   try {
-    const content = fs.readFileSync(sessionFile, 'utf-8');
-    const lines = content.split('\n');
+    const fd = fs.openSync(sessionFile, 'r');
+    const stat = fs.fstatSync(fd);
+    const TAIL_SIZE = 4096;
+    const start = Math.max(0, stat.size - TAIL_SIZE);
+    const buf = Buffer.alloc(Math.min(TAIL_SIZE, stat.size));
+    fs.readSync(fd, buf, 0, buf.length, start);
+    fs.closeSync(fd);
+
+    const chunk = buf.toString('utf-8');
+    // If we started mid-file, drop the first partial line
+    const lines = chunk.split('\n');
+    if (start > 0) lines.shift();
+
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i].trim();
       if (!line) continue;
       try {
         const record = JSON.parse(line);
-        if (record.type === 'user' || record.type === 'assistant') {
-          return record.type;
+        if (record.type === 'assistant') {
+          result.type = 'assistant';
+          const msg = record.message;
+          if (msg?.stop_reason === 'end_turn') {
+            const hasToolUse = Array.isArray(msg.content) &&
+              msg.content.some((b: any) => b.type === 'tool_use');
+            result.isEndTurn = !hasToolUse;
+          }
+          return result;
+        }
+        if (record.type === 'user') {
+          result.type = 'user';
+          return result;
+        }
+      } catch {
+        // skip malformed
+      }
+    }
+    return result;
+  } catch {
+    return result;
+  }
+}
+
+/** Extract slug from a session JSONL file (first 30 lines) */
+export function getSlugFromSession(sessionFile: string): string | null {
+  try {
+    const content = fs.readFileSync(sessionFile, 'utf-8');
+    const lines = content.split('\n').slice(0, 30);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const record = JSON.parse(line);
+        if (record.slug && typeof record.slug === 'string') {
+          return record.slug;
         }
       } catch {
         // skip malformed
@@ -172,6 +222,9 @@ export function scanProjectSessions(): SessionSummary[] {
       let timestamp: number;
       let messageCount: number;
       let lastRecordType: 'user' | 'assistant' | null;
+      let lastRecordIsEndTurn = false;
+      let lastViewedMtime: number;
+      let slug: string | undefined;
 
       if (!isSessionStale(sessionId, filePath, indexCache)) {
         // Use cached data
@@ -180,6 +233,17 @@ export function scanProjectSessions(): SessionSummary[] {
         timestamp = cached.timestamp;
         messageCount = cached.messageCount;
         lastRecordType = cached.lastRecordType;
+        lastRecordIsEndTurn = cached.lastRecordIsEndTurn ?? false;
+        lastViewedMtime = cached.lastViewedMtime ?? cached.fileMtime;
+        slug = cached.slug;
+        // Backfill slug for old cache entries that didn't have it
+        if (slug === undefined && !('slug' in cached)) {
+          slug = getSlugFromSession(filePath) || undefined;
+          if (slug !== undefined) {
+            updatedCache[sessionId] = { ...cached, slug };
+            cacheModified = true;
+          }
+        }
         // Update projectPath from cache if not yet resolved
         if (!projectPath || projectPath === projectHash) {
           projectPath = cached.projectPath;
@@ -200,11 +264,17 @@ export function scanProjectSessions(): SessionSummary[] {
         }
 
         messageCount = countMessages(filePath);
-        lastRecordType = messageCount > 0 ? getLastSignificantRecordType(filePath) : null;
+        const lastState = messageCount > 0 ? getLastRecordState(filePath) : { type: null as 'user' | 'assistant' | null, isEndTurn: false };
+        lastRecordType = lastState.type;
+        lastRecordIsEndTurn = lastState.isEndTurn;
 
-        // Update cache
+        slug = getSlugFromSession(filePath) || undefined;
+
+        // Preserve lastViewedMtime from old cache entry, or default to current mtime
+        const existingCache = indexCache[sessionId];
         try {
           const stat = fs.statSync(filePath);
+          lastViewedMtime = existingCache?.lastViewedMtime ?? stat.mtimeMs;
           updatedCache[sessionId] = {
             projectHash,
             projectPath,
@@ -212,17 +282,26 @@ export function scanProjectSessions(): SessionSummary[] {
             timestamp,
             messageCount,
             lastRecordType,
+            lastRecordIsEndTurn,
             fileMtime: stat.mtimeMs,
+            lastViewedMtime,
+            slug,
           };
           cacheModified = true;
         } catch {
-          // ignore stat error
+          lastViewedMtime = Date.now();
         }
       }
 
-      let status: 'idle' | 'need_attention' = 'idle';
-      if (messageCount > 0 && lastRecordType === 'assistant') {
-        status = 'need_attention';
+      // Status: mtime-based done/idle
+      let status: 'idle' | 'done' = 'idle';
+      try {
+        const stat = fs.statSync(filePath);
+        if (messageCount > 0 && stat.mtimeMs > lastViewedMtime) {
+          status = 'done';
+        }
+      } catch {
+        // keep idle
       }
 
       const managed = managedMap.get(sessionId);
@@ -236,6 +315,7 @@ export function scanProjectSessions(): SessionSummary[] {
         messageCount,
         displayName: managed?.displayName,
         status,
+        slug,
       });
     }
   }
