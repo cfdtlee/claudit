@@ -3,8 +3,21 @@ import FolderBrowser from '../FolderBrowser';
 import { useUIStore } from '../../stores/useUIStore';
 
 interface Props {
-  onCreateSession?: (projectPath: string, initialPrompt?: string, worktree?: { branchName: string }) => Promise<true | string>;
+  onCreateSession?: (projectPath: string, initialPrompt?: string, worktree?: { branchName: string }, model?: string, permissionMode?: string) => Promise<true | string>;
 }
+
+const MODEL_OPTIONS = [
+  { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'haiku', label: 'Haiku' },
+];
+
+const PERMISSION_OPTIONS = [
+  { value: 'full', label: 'Full' },
+  { value: 'default', label: 'Default' },
+  { value: 'plan', label: 'Plan' },
+  { value: 'ask', label: 'Ask' },
+];
 
 function Mascot({ running }: { running?: boolean }) {
   return (
@@ -35,7 +48,7 @@ function Mascot({ running }: { running?: boolean }) {
       <rect className="leg-right" x="13" y="13" width="1" height="3" fill="#c07040" />
       {/* Body */}
       <g className="body">
-        <rect x="2" y="6" width="12" height="7" fill="#d4915a" rx="1" />
+        <rect x="2" y="6" width="12" height="7" fill="#DA7756" rx="1" />
         <rect x="3" y="7" width="10" height="5" fill="#daa06d" />
         <rect x="5" y="9" width="2" height="2" fill="#2d2d2d" />
         <rect x="9" y="9" width="2" height="2" fill="#2d2d2d" />
@@ -60,6 +73,8 @@ export default function EmptyState({ onCreateSession }: Props) {
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [useWorktree, setUseWorktree] = useState(() => sessionDraft?.useWorktree ?? false);
   const [branchName, setBranchName] = useState(() => sessionDraft?.branchName ?? '');
+  const [model, setModel] = useState('opus');
+  const [permissionMode, setPermissionMode] = useState('full');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -96,7 +111,7 @@ export default function EmptyState({ onCreateSession }: Props) {
     setError(null);
     try {
       const worktree = useWorktree && branchName.trim() ? { branchName: branchName.trim() } : undefined;
-      const result = await onCreateSession(projectPath, prompt.trim() || undefined, worktree);
+      const result = await onCreateSession(projectPath, prompt.trim() || undefined, worktree, model, permissionMode);
       if (result === true) {
         setPrompt('');
         setSessionDraft(null);
@@ -109,7 +124,7 @@ export default function EmptyState({ onCreateSession }: Props) {
   }, [projectPath, prompt, onCreateSession, useWorktree, branchName, submitting]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !submitting) {
+    if (e.key === 'Enter' && e.metaKey && !submitting) {
       e.preventDefault();
       handleSubmit();
     }
@@ -182,7 +197,7 @@ export default function EmptyState({ onCreateSession }: Props) {
             onClick={handleSubmit}
             disabled={!projectPath || submitting}
             className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 bg-claude hover:bg-claude-hover"
-            title={projectPath ? 'Create session (Enter)' : 'Select a project folder first'}
+            title={projectPath ? 'Create session (⌘+Enter)' : 'Select a project folder first'}
           >
             {submitting ? (
               <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
@@ -191,7 +206,8 @@ export default function EmptyState({ onCreateSession }: Props) {
               </svg>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 19V5M5 12l7-7 7 7" />
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
             )}
           </button>
@@ -226,6 +242,34 @@ export default function EmptyState({ onCreateSession }: Props) {
               worktree
             </label>
           )}
+        </div>
+
+        {/* Model & Permission selectors */}
+        <div className="flex items-center gap-2 px-3 pb-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-gray-500">Model</span>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              className="text-[11px] bg-gray-800 text-gray-300 border border-gray-700 rounded px-1.5 py-0.5 outline-none focus:border-gray-500"
+            >
+              {MODEL_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-gray-500">Permissions</span>
+            <select
+              value={permissionMode}
+              onChange={e => setPermissionMode(e.target.value)}
+              className="text-[11px] bg-gray-800 text-gray-300 border border-gray-700 rounded px-1.5 py-0.5 outline-none focus:border-gray-500"
+            >
+              {PERMISSION_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Branch name input for worktree */}
@@ -263,7 +307,7 @@ export default function EmptyState({ onCreateSession }: Props) {
 
       {/* Keyboard hint */}
       <div className="mt-4 text-xs text-gray-600">
-        Press <kbd className="px-1.5 py-0.5 bg-gray-800 rounded border border-gray-700 text-gray-500 font-mono text-[10px]">Enter</kbd> to create
+        Press <kbd className="px-1.5 py-0.5 bg-gray-800 rounded border border-gray-700 text-gray-500 font-mono text-[10px]">⌘+Enter</kbd> to create
       </div>
     </div>
   );

@@ -1,9 +1,22 @@
 import { useState, useCallback } from 'react';
 import FolderBrowser from './FolderBrowser';
 
+const MODEL_OPTIONS = [
+  { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'haiku', label: 'Haiku' },
+];
+
+const PERMISSION_OPTIONS = [
+  { value: 'full', label: 'Full' },
+  { value: 'default', label: 'Default' },
+  { value: 'plan', label: 'Plan' },
+  { value: 'ask', label: 'Ask' },
+];
+
 interface Props {
   onClose: () => void;
-  onCreate: (projectPath: string, worktree?: { branchName: string }) => void;
+  onCreate: (projectPath: string, worktree?: { branchName: string }, model?: string, permissionMode?: string) => void;
 }
 
 export default function NewSessionModal({ onClose, onCreate }: Props) {
@@ -11,6 +24,8 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
+  const [model, setModel] = useState('opus');
+  const [permissionMode, setPermissionMode] = useState('full');
 
   const handlePathChange = useCallback((path: string, gitRepo: boolean) => {
     setCurrentPath(path);
@@ -26,7 +41,7 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
     const worktree = useWorktree && branchName.trim()
       ? { branchName: branchName.trim() }
       : undefined;
-    onCreate(currentPath, worktree);
+    onCreate(currentPath, worktree, model, permissionMode);
   };
 
   return (
@@ -38,6 +53,34 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
         <h2 className="text-sm font-semibold text-gray-200 mb-4">New Session</h2>
 
         <FolderBrowser onPathChange={handlePathChange} />
+
+        {/* Model & Permission selectors */}
+        <div className="mt-3 flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-400">Model</label>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              className="text-xs bg-gray-800 text-gray-200 border border-gray-700 rounded px-2 py-1 outline-none focus:border-claude"
+            >
+              {MODEL_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-400">Permissions</label>
+            <select
+              value={permissionMode}
+              onChange={e => setPermissionMode(e.target.value)}
+              className="text-xs bg-gray-800 text-gray-200 border border-gray-700 rounded px-2 py-1 outline-none focus:border-claude"
+            >
+              {PERMISSION_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         {/* Git worktree toggle — shown when browsing a git repo */}
         {isGitRepo && (

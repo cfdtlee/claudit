@@ -18,7 +18,7 @@ interface SessionState {
   archivedGroups: ProjectGroup[];
   archivedCount: number;
   query: string;
-  managedOnly: boolean;
+  statusFilter: Set<string>;
   loading: boolean;
   error: string | null;
   expandedSet: Set<string>;
@@ -37,7 +37,7 @@ interface SessionState {
   // Actions
   fetchSessions: (q?: string) => Promise<void>;
   fetchArchived: () => Promise<void>;
-  createSession: (projectPath: string, opts?: { worktree?: { branchName: string }; displayName?: string; initialPrompt?: string }) => Promise<{ projectHash: string; sessionId: string; projectPath: string } | null>;
+  createSession: (projectPath: string, opts?: { worktree?: { branchName: string }; displayName?: string; initialPrompt?: string; model?: string; permissionMode?: string }) => Promise<{ projectHash: string; sessionId: string; projectPath: string } | null>;
   renameSession: (sessionId: string, name: string) => Promise<void>;
   pinSession: (sessionId: string) => Promise<void>;
   archiveSession: (sessionId: string) => Promise<void>;
@@ -47,7 +47,7 @@ interface SessionState {
   toggleAllGroups: () => void;
   toggleArchivedGroup: (hash: string) => void;
   setQuery: (q: string) => void;
-  setManagedOnly: (v: boolean) => void;
+  setStatusFilter: (v: Set<string>) => void;
   setArchivedExpanded: (v: boolean) => void;
   searchContent: (query: string) => Promise<void>;
   clearContentSearch: () => void;
@@ -62,7 +62,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   archivedGroups: [],
   archivedCount: 0,
   query: '',
-  managedOnly: false,
+  statusFilter: new Set(),
   loading: true,
   error: null,
   expandedSet: new Set(),
@@ -79,7 +79,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   fetchSessions: async (q?: string) => {
     try {
       set({ error: null });
-      const data = await fetchSessions(q, true, get().managedOnly);
+      const data = await fetchSessions(q, true);
       set((state) => {
         const newState: Partial<SessionState> = { groups: data, loading: false };
         if (!state._initializedExpanded && data.length > 0) {
@@ -230,7 +230,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   setQuery: (q) => set({ query: q }),
-  setManagedOnly: (v) => set({ managedOnly: v }),
+  setStatusFilter: (v) => set({ statusFilter: v }),
   setArchivedExpanded: (v) => set({ archivedExpanded: v }),
 
   searchContent: async (query: string) => {

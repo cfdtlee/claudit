@@ -153,7 +153,7 @@ export default function TodoDetail({ todoId, onTodoDeleted, onTodoCreated }: Pro
     }
   };
 
-  const handleNewSessionCreated = async () => {
+  const handleNewSessionCreated = async (_projectPath: string, _worktree?: { branchName: string }, _model?: string, _permissionMode?: string) => {
     setShowNewSessionModal(false);
     await loadSessions();
   };

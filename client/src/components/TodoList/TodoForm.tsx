@@ -37,8 +37,25 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
     setSelectedSessionId(value);
   };
 
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent Enter from submitting, require Cmd+Enter
+    if (e.key === 'Enter' && !e.metaKey) {
+      // Allow Enter in textarea (description) for newlines
+      if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      e.preventDefault();
+    }
+    if (e.key === 'Enter' && e.metaKey) {
+      e.preventDefault();
+      handleSubmitAction();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    handleSubmitAction();
+  };
+
+  const handleSubmitAction = () => {
     if (!title.trim()) return;
 
     let sessionId: string | undefined;
@@ -64,7 +81,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-3">
       <div>
         <label className="block text-xs text-gray-400 mb-1">Title *</label>
         <input

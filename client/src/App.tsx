@@ -71,9 +71,9 @@ export default function App() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  const handleCreateFromEmpty = useCallback(async (projectPath: string, initialPrompt?: string, worktree?: { branchName: string }): Promise<true | string> => {
+  const handleCreateFromEmpty = useCallback(async (projectPath: string, initialPrompt?: string, worktree?: { branchName: string }, model?: string, permissionMode?: string): Promise<true | string> => {
     try {
-      const result = await createSession(projectPath, { initialPrompt, worktree });
+      const result = await createSession(projectPath, { initialPrompt, worktree, model, permissionMode });
       if (result) {
         selectSession(result.projectHash, result.sessionId, result.projectPath, true);
         return true;

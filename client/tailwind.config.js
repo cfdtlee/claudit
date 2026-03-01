@@ -5,8 +5,8 @@ export default {
     extend: {
       colors: {
         claude: {
-          DEFAULT: '#d4915a',
-          hover: '#c07e4a',
+          DEFAULT: '#DA7756',
+          hover: '#C4623F',
         },
       },
     },

@@ -61,7 +61,7 @@ export async function fetchMergedSessionDetail(
 
 export async function createSession(
   projectPath: string,
-  opts?: { worktree?: { branchName: string }; displayName?: string; initialPrompt?: string },
+  opts?: { worktree?: { branchName: string }; displayName?: string; initialPrompt?: string; model?: string; permissionMode?: string },
 ): Promise<{ sessionId: string; projectPath: string; projectHash: string }> {
   const res = await fetch('/api/sessions/new', {
     method: 'POST',

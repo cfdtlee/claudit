@@ -38,7 +38,7 @@ router.get('/', (req, res) => {
 // POST /api/sessions/new — create a fresh claude session
 router.post('/new', (req, res) => {
   try {
-    const { projectPath, worktree, displayName, initialPrompt } = req.body;
+    const { projectPath, worktree, displayName, initialPrompt, model, permissionMode } = req.body;
     if (!projectPath || typeof projectPath !== 'string') {
       res.status(400).json({ error: 'projectPath is required' });
       return;
@@ -82,10 +82,20 @@ router.post('/new', (req, res) => {
       : 'hello';
     const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'));
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
+
+    // Build CLI flags
+    const cliFlags: string[] = ['-p', '--output-format', 'json', '--max-turns', '1'];
+    if (model && typeof model === 'string') {
+      cliFlags.push('--model', model);
+    }
+    if (permissionMode && typeof permissionMode === 'string') {
+      cliFlags.push('--permission-mode', permissionMode);
+    }
+
     let result: string;
     try {
       result = execSync(
-        `${CLAUDE_BIN} -p --output-format json --max-turns 1 '${escapedPrompt}'`,
+        `${CLAUDE_BIN} ${cliFlags.join(' ')} '${escapedPrompt}'`,
         { cwd: actualProjectPath, encoding: 'utf-8', timeout: 60_000, env: cleanEnv },
       );
     } catch (e: any) {

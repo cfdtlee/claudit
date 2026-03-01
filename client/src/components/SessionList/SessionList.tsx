@@ -12,13 +12,15 @@ interface ContextMenuState {
   hasUnarchived: boolean;
 }
 
+const STATUS_OPTIONS = ['running', 'idle', 'done'] as const;
+
 export default function SessionList() {
   const {
     groups,
     archivedGroups,
     archivedCount,
     query,
-    managedOnly,
+    statusFilter,
     loading,
     error,
     expandedSet,
@@ -29,24 +31,22 @@ export default function SessionList() {
     contentSearching,
     fetchSessions,
     fetchArchived,
-    createSession,
     toggleAllGroups,
     setQuery,
-    setManagedOnly,
+    setStatusFilter,
     setArchivedExpanded,
     searchContent,
     clearContentSearch,
   } = useSessionStore();
 
-  const [contentMode, setContentMode] = useState(false);
-
   const selectSession = useUIStore(s => s.selectSession);
-  const clearSelected = useUIStore(s => s.clearSelected);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const lastClickedIndexRef = useRef<number>(-1);
   const menuRef = useRef<HTMLDivElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   // Initial load
   useEffect(() => {
@@ -54,23 +54,44 @@ export default function SessionList() {
     fetchArchived();
   }, [fetchSessions, fetchArchived]);
 
-  // Debounced query search
+  // Debounced query search — always search content when query present
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (contentMode && query) {
+      if (query) {
         searchContent(query);
       } else {
         clearContentSearch();
-        fetchSessions(query || undefined);
+        fetchSessions();
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, fetchSessions, managedOnly, contentMode, searchContent, clearContentSearch]);
+  }, [query, fetchSessions, searchContent, clearContentSearch]);
+
+  // Close status dropdown on click outside
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [statusDropdownOpen]);
+
+  // Filter groups by status client-side
+  const filteredGroups = useMemo(() => {
+    if (statusFilter.size === 0) return groups;
+    return groups.map(g => ({
+      ...g,
+      sessions: g.sessions.filter(s => statusFilter.has(s.status ?? 'idle')),
+    })).filter(g => g.sessions.length > 0);
+  }, [groups, statusFilter]);
 
   // Flat list of visible sessions for shift-click range selection
   const flatVisibleSessions = useMemo(() => {
     const result: { sessionId: string; projectHash: string; projectPath: string; isArchived: boolean }[] = [];
-    for (const g of groups) {
+    for (const g of filteredGroups) {
       if (expandedSet.has(g.projectHash)) {
         for (const s of g.sessions) {
           result.push({ sessionId: s.sessionId, projectHash: g.projectHash, projectPath: g.projectPath, isArchived: false });
@@ -87,7 +108,7 @@ export default function SessionList() {
       }
     }
     return result;
-  }, [groups, archivedGroups, expandedSet, archivedExpanded, archivedGroupExpanded]);
+  }, [filteredGroups, archivedGroups, expandedSet, archivedExpanded, archivedGroupExpanded]);
 
   // Build a lookup: sessionId → { projectHash, isArchived }
   const sessionLookup = useMemo(() => {
@@ -149,17 +170,12 @@ export default function SessionList() {
       setSelectedIds(next);
       lastClickedIndexRef.current = flatIndex;
     } else {
-      // Plain click — clear selection and open detail (or deselect if already selected)
+      // Plain click — clear selection and open detail (always select, never deselect)
       setSelectedIds(new Set());
       setContextMenu(null);
-      const currentSelected = useUIStore.getState().selected;
-      if (currentSelected?.sessionId === sessionId) {
-        clearSelected();
-      } else {
-        const info = sessionLookup.get(sessionId);
-        if (info) {
-          selectSession(info.projectHash, sessionId, info.projectPath);
-        }
+      const info = sessionLookup.get(sessionId);
+      if (info) {
+        selectSession(info.projectHash, sessionId, info.projectPath);
       }
       lastClickedIndexRef.current = flatIndex;
     }
@@ -242,7 +258,20 @@ export default function SessionList() {
     await refresh();
   }, [selectedIds, sessionLookup, refresh]);
 
-  const allExpanded = groups.length > 0 && groups.every(g => expandedSet.has(g.projectHash));
+  const toggleStatusOption = (status: string) => {
+    const next = new Set(statusFilter);
+    if (next.has(status)) next.delete(status);
+    else next.add(status);
+    setStatusFilter(next);
+  };
+
+  const statusLabel = statusFilter.size === 0
+    ? 'All statuses'
+    : Array.from(statusFilter).join(', ');
+
+  const allExpanded = filteredGroups.length > 0 && filteredGroups.every(g => expandedSet.has(g.projectHash));
+
+  const clearSelected = useUIStore(s => s.clearSelected);
 
   return (
     <div className="flex flex-col h-full">
@@ -266,24 +295,43 @@ export default function SessionList() {
             {creating ? '...' : '+ New'}
           </button>
         </div>
-        {/* Toggle pill */}
-        <div className="flex rounded-md overflow-hidden border border-gray-700 text-xs mt-2">
+        {/* Status filter dropdown */}
+        <div className="relative mt-2" ref={statusDropdownRef}>
           <button
-            onClick={() => setManagedOnly(false)}
-            className={`flex-1 px-3 py-1 transition-colors ${
-              !managedOnly ? 'bg-gray-700 text-gray-200' : 'bg-transparent text-gray-500 hover:text-gray-300'
-            }`}
+            onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+            className="w-full flex items-center justify-between text-xs px-3 py-1.5 rounded-md border border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600 transition-colors"
           >
-            All
+            <span className="truncate capitalize">{statusLabel}</span>
+            <svg className={`w-3 h-3 ml-1 text-gray-500 transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
-          <button
-            onClick={() => setManagedOnly(true)}
-            className={`flex-1 px-3 py-1 transition-colors ${
-              managedOnly ? 'bg-gray-700 text-gray-200' : 'bg-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            Manager
-          </button>
+          {statusDropdownOpen && (
+            <div className="absolute z-30 mt-1 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1">
+              {STATUS_OPTIONS.map(status => (
+                <label
+                  key={status}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={statusFilter.has(status)}
+                    onChange={() => toggleStatusOption(status)}
+                    className="rounded w-3 h-3 bg-gray-900 border-gray-600"
+                  />
+                  <span className="capitalize">{status}</span>
+                </label>
+              ))}
+              {statusFilter.size > 0 && (
+                <button
+                  onClick={() => setStatusFilter(new Set())}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors border-t border-gray-700 mt-1"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -316,15 +364,10 @@ export default function SessionList() {
       <SearchBar
         value={query}
         onChange={setQuery}
-        contentMode={contentMode}
-        onToggleContentMode={() => {
-          setContentMode(!contentMode);
-          if (contentMode) clearContentSearch();
-        }}
       />
       <div className="flex-1 overflow-y-auto">
-        {/* Content search results */}
-        {contentMode && query ? (
+        {/* Content search results — shown when query is present */}
+        {query ? (
           contentSearching ? (
             <div className="p-4 text-sm text-gray-500">Searching content...</div>
           ) : contentSearchResults.length === 0 ? (
@@ -352,10 +395,10 @@ export default function SessionList() {
         {error && (
           <div className="p-4 text-sm text-red-400">{error}</div>
         )}
-        {!loading && !error && groups.length === 0 && archivedCount === 0 && (
+        {!loading && !error && filteredGroups.length === 0 && archivedCount === 0 && (
           <div className="p-4 text-sm text-gray-500">No sessions found</div>
         )}
-        {groups.map(g => (
+        {filteredGroups.map(g => (
           <ProjectGroup
             key={g.projectHash}
             group={g}

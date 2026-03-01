@@ -17,8 +17,23 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [showBrowser, setShowBrowser] = useState(false);
 
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.metaKey) {
+      if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      e.preventDefault();
+    }
+    if (e.key === 'Enter' && e.metaKey) {
+      e.preventDefault();
+      handleSubmitAction();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    handleSubmitAction();
+  };
+
+  const handleSubmitAction = () => {
     onSubmit({
       name: name.trim(),
       cronExpression: cronExpression.trim(),
@@ -29,7 +44,7 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-4">
       <div>
         <label className="block text-xs text-gray-400 mb-1">Task Name</label>
         <input
