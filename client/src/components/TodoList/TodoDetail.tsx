@@ -61,6 +61,13 @@ export default function TodoDetail({ todoId, onTodoDeleted, onTodoCreated }: Pro
     }
   }, []);
 
+  // Clear edit mode when switching to a different todo
+  useEffect(() => {
+    if (editingTodoId && editingTodoId !== todoId) {
+      setEditingTodoId(null);
+    }
+  }, [todoId]);
+
   useEffect(() => {
     loadTodo();
     loadSessions();
@@ -112,13 +119,15 @@ export default function TodoDetail({ todoId, onTodoDeleted, onTodoCreated }: Pro
     }
   };
 
-  const handleClaudeIt = async (projectPath: string, worktree?: { branchName: string }) => {
+  const handleClaudeIt = async (projectPath: string, worktree?: { branchName: string }, model?: string, permissionMode?: string) => {
     setShowClaudeItModal(false);
     setClaudeItLoading(true);
     try {
       const result = await createSession(projectPath, {
         worktree,
         displayName: todo.title,
+        model,
+        permissionMode,
       });
 
       // Build prompt to pre-fill in terminal (user reviews and presses Enter to submit)
@@ -284,7 +293,17 @@ export default function TodoDetail({ todoId, onTodoDeleted, onTodoCreated }: Pro
                 <div className="text-sm bg-gray-800 rounded-lg p-2 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-300">{todo.sessionLabel || todo.sessionId}</span>
+                      <span
+                        className={`text-gray-300 ${linkedSession ? 'cursor-pointer hover:text-claude transition-colors' : ''}`}
+                        onClick={() => {
+                          if (linkedSession) {
+                            selectSession(linkedSession.projectHash, linkedSession.sessionId, linkedSession.projectPath);
+                            setView('sessions');
+                          }
+                        }}
+                      >
+                        {todo.sessionLabel || todo.sessionId}
+                      </span>
                       <span className="text-gray-600 text-xs font-mono">{todo.sessionId}</span>
                     </div>
                     {linkedSession && (

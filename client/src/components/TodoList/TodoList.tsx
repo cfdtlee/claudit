@@ -30,6 +30,7 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const composingRef = useRef(false);
 
@@ -207,22 +208,27 @@ export default function TodoList({ selectedTodoId, onSelect }: Props) {
             type="text"
             data-search-input
             placeholder="Search todos..."
-            value={searchQuery}
+            value={localSearchQuery}
             onChange={e => {
-              setSearchQuery(e.target.value);
+              setLocalSearchQuery(e.target.value);
+              if (!composingRef.current) {
+                setSearchQuery(e.target.value);
+              }
             }}
             onCompositionStart={() => { composingRef.current = true; }}
             onCompositionEnd={e => {
               composingRef.current = false;
-              setSearchQuery((e.target as HTMLInputElement).value);
+              const val = (e.target as HTMLInputElement).value;
+              setLocalSearchQuery(val);
+              setSearchQuery(val);
             }}
             className="w-full pl-8 pr-7 py-2 rounded-md bg-gray-800 text-gray-200 text-sm
                        placeholder-gray-500 border border-gray-700 focus:border-blue-500
                        focus:outline-none transition-colors"
           />
-          {searchQuery && (
+          {localSearchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => { setLocalSearchQuery(''); setSearchQuery(''); }}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
             >
               ✕

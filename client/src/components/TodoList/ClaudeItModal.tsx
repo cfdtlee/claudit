@@ -1,8 +1,21 @@
 import { useState, useCallback } from 'react';
 import FolderBrowser from '../FolderBrowser';
 
+const MODEL_OPTIONS = [
+  { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'haiku', label: 'Haiku' },
+];
+
+const PERMISSION_OPTIONS = [
+  { value: 'full', label: 'Full (skip all)' },
+  { value: 'default', label: 'Default' },
+  { value: 'plan', label: 'Plan mode' },
+  { value: 'ask', label: 'Ask every time' },
+];
+
 interface Props {
-  onSelect: (projectPath: string, worktree?: { branchName: string }) => void;
+  onSelect: (projectPath: string, worktree?: { branchName: string }, model?: string, permissionMode?: string) => void;
   onClose: () => void;
 }
 
@@ -11,6 +24,8 @@ export default function ClaudeItModal({ onSelect, onClose }: Props) {
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
+  const [model, setModel] = useState('opus');
+  const [permissionMode, setPermissionMode] = useState('full');
 
   const handlePathChange = useCallback((path: string, gitRepo: boolean) => {
     setCurrentPath(path);
@@ -23,12 +38,11 @@ export default function ClaudeItModal({ onSelect, onClose }: Props) {
 
   const handleStart = () => {
     if (!currentPath) return;
-    // Save confirmed selection path so next time the browser opens here
     try { localStorage.setItem('claudit:lastBrowserPath', currentPath); } catch {}
     const worktree = useWorktree && branchName.trim()
       ? { branchName: branchName.trim() }
       : undefined;
-    onSelect(currentPath, worktree);
+    onSelect(currentPath, worktree, model, permissionMode);
   };
 
   return (
@@ -41,6 +55,34 @@ export default function ClaudeItModal({ onSelect, onClose }: Props) {
         <p className="text-xs text-gray-400 mb-4">Pick a project directory to start a new Claude session for this todo.</p>
 
         <FolderBrowser onPathChange={handlePathChange} />
+
+        {/* Model & Permission */}
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Model</label>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-claude"
+            >
+              {MODEL_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Permissions</label>
+            <select
+              value={permissionMode}
+              onChange={e => setPermissionMode(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-claude"
+            >
+              {PERMISSION_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         {isGitRepo && (
           <div className="mt-3 p-2 bg-gray-800/50 rounded border border-gray-700">
@@ -75,9 +117,9 @@ export default function ClaudeItModal({ onSelect, onClose }: Props) {
           <button
             onClick={handleStart}
             disabled={!currentPath || (useWorktree && !branchName.trim())}
-            className="text-xs px-3 py-1.5 rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50"
+            className="text-xs px-3 py-1.5 rounded bg-claude text-white hover:bg-claude-hover disabled:opacity-50"
           >
-            Start
+            Claudit
           </button>
         </div>
       </div>

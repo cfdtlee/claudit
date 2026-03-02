@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { TodoItem, SessionSummary } from '../../types';
 
 interface Props {
@@ -21,6 +21,18 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
   const [description, setDescription] = useState(initial?.description ?? '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(initial?.priority ?? 'medium');
   const [selectedSessionId, setSelectedSessionId] = useState(initial?.sessionId ?? prefillSessionId ?? '');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }, []);
+
+  // Auto-resize on mount (for pre-filled content)
+  useEffect(() => { autoResize(); }, [autoResize]);
 
   // When prefillSessionId changes (e.g. from session→todo flow), update selection
   useEffect(() => {
@@ -97,10 +109,10 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
       <div>
         <label className="block text-xs text-gray-400 mb-1">Description</label>
         <textarea
+          ref={textareaRef}
           value={description}
-          onChange={e => setDescription(e.target.value)}
-          rows={3}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude resize-none"
+          onChange={e => { setDescription(e.target.value); autoResize(); }}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude resize-none min-h-[72px]"
           placeholder="Optional details..."
         />
       </div>
@@ -167,9 +179,10 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
         <button
           type="submit"
           disabled={!title.trim()}
-          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50"
+          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
         >
           {initial ? 'Save' : 'Create'}
+          <kbd className="text-[10px] opacity-70 bg-white/10 px-1 rounded">⌘↵</kbd>
         </button>
       </div>
     </form>

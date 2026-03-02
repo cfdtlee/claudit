@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CronTask, CronExecution, SessionSummary } from '../../types';
 import {
   fetchCronTasks,
@@ -24,6 +24,7 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
   const [executions, setExecutions] = useState<CronExecution[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [running, setRunning] = useState(false);
+  const fastPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const editingCronTaskId = useUIStore(s => s.editingCronTaskId);
   const setEditingCronTaskId = useUIStore(s => s.setEditingCronTaskId);
@@ -53,10 +54,24 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
     }
   }, [taskId]);
 
+  // When new executions appear while running, stop fast poll
+  const prevExecCountRef = useRef(executions.length);
+  useEffect(() => {
+    if (running && executions.length > prevExecCountRef.current) {
+      // New execution appeared — stop fast poll after a short delay to let it settle
+      if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; }
+      setRunning(false);
+    }
+    prevExecCountRef.current = executions.length;
+  }, [executions.length, running]);
+
   useEffect(() => {
     loadTask();
     const interval = setInterval(loadTask, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (fastPollRef.current) clearInterval(fastPollRef.current);
+    };
   }, [loadTask]);
 
   if (!taskId) {
@@ -105,10 +120,23 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
     setRunning(true);
     try {
       await runCronTask(task.id);
-      setTimeout(loadTask, 1000);
+      // Poll every 2s for up to 30s until new execution appears, then revert to normal 5s
+      const prevCount = executions.length;
+      let elapsed = 0;
+      if (fastPollRef.current) clearInterval(fastPollRef.current);
+      fastPollRef.current = setInterval(async () => {
+        elapsed += 2000;
+        await loadTask();
+        // Stop fast polling once new execution appears or after 30s
+        if (elapsed >= 30000) {
+          if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; }
+          setRunning(false);
+        }
+      }, 2000);
+      // Also do an immediate reload
+      await loadTask();
     } catch (err) {
       console.error('Failed to run task:', err);
-    } finally {
       setRunning(false);
     }
   };

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface Props {
   value: string;
@@ -7,6 +7,14 @@ interface Props {
 
 export default function SearchBar({ value, onChange }: Props) {
   const composingRef = useRef(false);
+  const [localValue, setLocalValue] = useState(value);
+
+  // Sync external value → localValue only when not composing
+  useEffect(() => {
+    if (!composingRef.current) {
+      setLocalValue(value);
+    }
+  }, [value]);
 
   return (
     <div className="p-3 border-b border-gray-800">
@@ -19,8 +27,9 @@ export default function SearchBar({ value, onChange }: Props) {
           type="text"
           data-search-input
           placeholder="Search sessions..."
-          value={value}
+          value={localValue}
           onChange={e => {
+            setLocalValue(e.target.value);
             if (!composingRef.current) {
               onChange(e.target.value);
             }
@@ -28,15 +37,17 @@ export default function SearchBar({ value, onChange }: Props) {
           onCompositionStart={() => { composingRef.current = true; }}
           onCompositionEnd={e => {
             composingRef.current = false;
-            onChange((e.target as HTMLInputElement).value);
+            const val = (e.target as HTMLInputElement).value;
+            setLocalValue(val);
+            onChange(val);
           }}
           className="w-full pl-8 pr-7 py-2 rounded-md bg-gray-800 text-gray-200 text-sm
                      placeholder-gray-500 border border-gray-700 focus:border-blue-500
                      focus:outline-none transition-colors"
         />
-        {value && (
+        {localValue && (
           <button
-            onClick={() => onChange('')}
+            onClick={() => { setLocalValue(''); onChange(''); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
           >
             ✕

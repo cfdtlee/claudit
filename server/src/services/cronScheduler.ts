@@ -76,16 +76,18 @@ async function executeTask(taskId: string) {
   const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'));
   const cwd = task.projectPath || undefined;
 
+  // Create execution record immediately so the UI can see it
+  const exec = createExecution(taskId, undefined);
+
   // Step 1: Create a session asynchronously (non-blocking)
   const sessionId = await createSessionAsync(task.name, cwd, cleanEnv);
   if (sessionId) {
     addManagedSession(sessionId, task.projectPath || '');
     renameManagedSession(sessionId, `Workflow: ${task.name}`);
     invalidateSessionCache();
+    updateExecution(exec.id, { sessionId });
     console.log(`[cron] Created session ${sessionId} for task ${task.name}`);
   }
-
-  const exec = createExecution(taskId, sessionId);
 
   // Step 2: Execute the full prompt (resume session if available)
   const args = sessionId

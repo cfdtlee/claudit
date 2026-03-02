@@ -88,7 +88,7 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
   const handleJumpToTodo = () => {
     if (linkedTodo) {
       setSelectedTodoId(linkedTodo.id);
-      setView('todos');
+      setView('todo');
     }
   };
 
@@ -126,7 +126,7 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setShowIdPopover(!showIdPopover)}
-              className="w-5 h-5 rounded-full border border-gray-600 text-gray-500 hover:text-gray-300 hover:border-gray-400 flex items-center justify-center text-[10px] font-medium transition-colors"
+              className="w-4 h-4 rounded-full border border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-400 flex items-center justify-center text-[9px] font-medium transition-colors"
               title="Session info"
             >
               i

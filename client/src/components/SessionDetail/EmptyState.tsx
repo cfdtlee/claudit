@@ -7,16 +7,17 @@ interface Props {
 }
 
 const MODEL_OPTIONS = [
-  { value: 'opus', label: 'Opus' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'haiku', label: 'Haiku' },
+  { value: 'opus', label: 'opus' },
+  { value: 'sonnet', label: 'sonnet' },
+  { value: 'haiku', label: 'haiku' },
 ];
 
 const PERMISSION_OPTIONS = [
-  { value: 'full', label: 'Full' },
-  { value: 'default', label: 'Default' },
-  { value: 'plan', label: 'Plan' },
-  { value: 'ask', label: 'Ask' },
+  { value: 'bypassPermissions', label: 'bypassPermissions' },
+  { value: 'default', label: 'default' },
+  { value: 'plan', label: 'plan' },
+  { value: 'acceptEdits', label: 'acceptEdits' },
+  { value: 'dontAsk', label: 'dontAsk' },
 ];
 
 function Mascot({ running }: { running?: boolean }) {
@@ -74,7 +75,7 @@ export default function EmptyState({ onCreateSession }: Props) {
   const [useWorktree, setUseWorktree] = useState(() => sessionDraft?.useWorktree ?? false);
   const [branchName, setBranchName] = useState(() => sessionDraft?.branchName ?? '');
   const [model, setModel] = useState('opus');
-  const [permissionMode, setPermissionMode] = useState('full');
+  const [permissionMode, setPermissionMode] = useState('bypassPermissions');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -158,7 +159,8 @@ export default function EmptyState({ onCreateSession }: Props) {
       )}
 
       {/* Input card */}
-      <div className="w-full max-w-[560px] bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+      <div className={`w-full max-w-[560px] ${submitting ? 'glow-border' : ''}`}>
+      <div className={`bg-gray-900 rounded-xl border border-gray-700 overflow-hidden relative z-[1] ${submitting ? 'glow-border-inner' : ''}`}>
         {/* Prompt textarea */}
         <div className="px-4 pt-3 pb-2">
           <textarea
@@ -285,6 +287,7 @@ export default function EmptyState({ onCreateSession }: Props) {
             />
           </div>
         )}
+      </div>
       </div>
 
       {/* Folder picker dropdown */}

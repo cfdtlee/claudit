@@ -108,7 +108,8 @@ export default function TodoEmptyState({ onTodoCreated }: Props) {
       </div>
 
       {/* Creation card */}
-      <div className="w-full max-w-[560px] bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+      <div className={`w-full max-w-[560px] ${submitting ? 'glow-border' : ''}`}>
+      <div className={`bg-gray-900 rounded-xl border border-gray-700 overflow-hidden relative z-[1] ${submitting ? 'glow-border-inner' : ''}`}>
         {/* Title input */}
         <div className="px-4 pt-3 pb-2">
           <input
@@ -199,6 +200,7 @@ export default function TodoEmptyState({ onTodoCreated }: Props) {
             ))}
           </select>
         </div>
+      </div>
       </div>
 
       {/* Keyboard hint */}
