@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { SessionDetail as SessionDetailType, TodoItem } from '../../types';
+import { SessionDetail as SessionDetailType, Task } from '../../types';
 import { fetchSessionDetail, markSessionSeen } from '../../api/sessions';
-import { fetchTodos } from '../../api/todo';
+import { fetchTasks } from '../../api/tasks';
 import { useUIStore } from '../../stores/useUIStore';
 import EmptyState from './EmptyState';
 
@@ -24,12 +24,12 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('terminal');
-  const [linkedTodo, setLinkedTodo] = useState<TodoItem | null>(null);
+  const [linkedTask, setLinkedTask] = useState<Task | null>(null);
   const [showIdPopover, setShowIdPopover] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const setView = useUIStore(s => s.setView);
-  const setSelectedTodoId = useUIStore(s => s.setSelectedTodoId);
+  const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
 
   const hasMergedHistory = !!(slug && slugSessionIds && slugSessionIds.length > 1);
 
@@ -65,13 +65,13 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
     return () => { cancelled = true; };
   }, [projectHash, sessionId]);
 
-  // Load linked todo
+  // Load linked task
   useEffect(() => {
     let cancelled = false;
-    fetchTodos().then(todos => {
+    fetchTasks().then(tasks => {
       if (!cancelled) {
-        const found = todos.find(t => t.sessionId === sessionId);
-        setLinkedTodo(found ?? null);
+        const found = tasks.find(t => t.sessionId === sessionId);
+        setLinkedTask(found ?? null);
       }
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -85,10 +85,10 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
     } catch {}
   };
 
-  const handleJumpToTodo = () => {
-    if (linkedTodo) {
-      setSelectedTodoId(linkedTodo.id);
-      setView('todo');
+  const handleJumpToTask = () => {
+    if (linkedTask) {
+      setSelectedTaskId(linkedTask.id);
+      setView('tasks');
     }
   };
 
@@ -100,18 +100,30 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
     );
   }
 
-  if (error) {
+  if (error && !detail) {
+    // Still render terminal even if session detail fetch fails (e.g. mayor sessions)
     return (
-      <div className="flex-1 flex items-center justify-center text-red-400">
-        {error}
+      <div className="flex flex-col h-full">
+        <div className="border-b border-gray-800 px-6 py-3 bg-gray-900 shrink-0">
+          <div className="text-sm font-medium text-gray-200 truncate">
+            {sessionId.slice(0, 8)}...
+          </div>
+        </div>
+        <Suspense fallback={
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Loading terminal...
+          </div>
+        }>
+          <TerminalView sessionId={sessionId} projectPath={projectPath} />
+        </Suspense>
       </div>
     );
   }
 
   if (!detail) return <EmptyState />;
 
-  const displayTitle = linkedTodo
-    ? linkedTodo.title
+  const displayTitle = linkedTask
+    ? linkedTask.title
     : detail.projectPath.split('/').pop() || detail.sessionId;
 
   return (
@@ -149,10 +161,10 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Jump to linked todo */}
-          {linkedTodo && (
+          {/* Jump to linked task */}
+          {linkedTask && (
             <button
-              onClick={handleJumpToTodo}
+              onClick={handleJumpToTask}
               className="text-xs px-2 py-1 rounded-md text-claude hover:bg-gray-800 transition-colors flex items-center gap-1"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

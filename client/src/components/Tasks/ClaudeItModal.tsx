@@ -53,7 +53,7 @@ export default function ClaudeItModal({ onSelect, onClose }: Props) {
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-sm font-semibold text-gray-200 mb-1">Claudit</h2>
-        <p className="text-xs text-gray-400 mb-4">Pick a project directory to start a new Claude session for this todo.</p>
+        <p className="text-xs text-gray-400 mb-4">Pick a project directory to start a new Claude session for this task.</p>
 
         <FolderBrowser onPathChange={handlePathChange} />
 

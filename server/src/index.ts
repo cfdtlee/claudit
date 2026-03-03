@@ -5,9 +5,13 @@ import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import sessionRoutes from './routes/sessions.js';
 import cronRoutes from './routes/cron.js';
-import todoRoutes from './routes/todo.js';
-import groupRoutes from './routes/groups.js';
 import filesystemRoutes from './routes/filesystem.js';
+import agentRoutes from './routes/agents.js';
+import projectRoutes from './routes/projects.js';
+import taskRoutes from './routes/tasks.js';
+import settingsRoutes from './routes/settings.js';
+import dashboardRoutes from './routes/dashboard.js';
+import groupRoutes from './routes/groups.js';
 import { ClaudeProcess } from './services/claudeProcess.js';
 import { initScheduler, stopAllJobs } from './services/cronScheduler.js';
 let handleTerminalConnection: ((ws: import('ws').WebSocket) => void) | null = null;
@@ -19,6 +23,10 @@ try {
 }
 import { eventBus } from './services/eventBus.js';
 import { closeDb } from './services/database.js';
+import { startWitness, stopWitness, witnessEmitter } from './services/witnessService.js';
+import { ensureMayorRunning, sendToMayor, stopMayor } from './services/mayorService.js';
+import { updateTask } from './services/taskStorage.js';
+import { getSetting } from './services/settingsStorage.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -30,9 +38,13 @@ app.use(express.json());
 // REST routes
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/cron', cronRoutes);
-app.use('/api/todo/groups', groupRoutes);
-app.use('/api/todo', todoRoutes);
 app.use('/api/filesystem', filesystemRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/groups', groupRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -186,11 +198,66 @@ wss.on('connection', (ws: WebSocket) => {
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   initScheduler();
+  startWitness();
+
+  // Broadcast to all connected /ws/events clients
+  function broadcastEvent(event: object) {
+    const msg = JSON.stringify(event);
+    for (const client of wssEvents.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(msg);
+      }
+    }
+  }
+
+  // Listen for witness events
+  witnessEmitter.on('mayorCheck', async (_sessionId: string) => {
+    try {
+      await ensureMayorRunning();
+    } catch (err) {
+      console.error('[server] Failed to ensure mayor running:', err);
+    }
+  });
+
+  witnessEmitter.on('sessionStuck', (data: any) => {
+    const elapsedMin = Math.round(data.elapsed / 60000);
+    console.warn(`[witness] Session stuck: task=${data.taskId} elapsed=${elapsedMin}m`);
+
+    // 1. Update task status to 'waiting' with error message
+    updateTask(data.taskId, {
+      status: 'waiting',
+      errorMessage: `Session stuck for ${elapsedMin} minutes`,
+    });
+
+    // 2. Broadcast to frontend
+    broadcastEvent({ type: 'task_updated', taskId: data.taskId });
+  });
+
+  witnessEmitter.on('taskUnblocked', async (taskId: string) => {
+    console.log(`[witness] Task unblocked: ${taskId}`);
+
+    // 1. Ensure status is 'pending'
+    updateTask(taskId, { status: 'pending' });
+
+    // 2. Broadcast to frontend
+    broadcastEvent({ type: 'task_updated', taskId });
+
+    // 3. If mayorAutoExecute is enabled, notify Mayor
+    if (getSetting('mayorAutoExecute') === 'true') {
+      try {
+        await sendToMayor(`Task unblocked: ${taskId}. Check pending tasks and schedule execution.`);
+      } catch (err) {
+        console.error('[server] Failed to notify mayor about unblocked task:', err);
+      }
+    }
+  });
 });
 
 // Graceful shutdown for tsx watch restarts
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, () => {
+    stopWitness();
+    stopMayor();
     stopAllJobs();
     closeDb();
     server.close();

@@ -1,8 +1,10 @@
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs';
 import os from 'os';
 import { WebSocket } from 'ws';
 import { eventBus } from './eventBus.js';
+import { CLAUDE_BIN } from './claudeProcess.js';
 
 // node-pty is optional — dynamically loaded
 let pty: typeof import('node-pty') | null = null;
@@ -19,14 +21,6 @@ export function getActivePtySessions(): ReadonlySet<string> {
   return activePtySessions;
 }
 
-// Resolve claude binary path at startup
-const CLAUDE_BIN = (() => {
-  try {
-    return execSync('which claude', { encoding: 'utf-8' }).trim();
-  } catch {
-    return 'claude';
-  }
-})();
 console.log(`[pty] Claude binary: ${CLAUDE_BIN}`);
 
 // Control message prefix — \x00 distinguishes control JSON from raw PTY data
@@ -107,7 +101,9 @@ function appendScrollback(entry: PtyEntry, data: string) {
   }
 }
 
-function detectExternalClaude(sessionId: string): string | null {
+const execFileAsync = promisify(execFile);
+
+async function detectExternalClaude(sessionId: string): Promise<string | null> {
   if (!sessionId) return null;
 
   // If we have an active PTY for this session, the claude process is ours — skip
@@ -117,16 +113,16 @@ function detectExternalClaude(sessionId: string): string | null {
     }
   }
 
-  // No active PTY from us — check if someone else is using this session
+  // No active PTY from us — check if someone else is using this session (non-blocking)
   try {
-    const output = execSync(
-      `pgrep -af "claude.*--resume.*${sessionId}" 2>/dev/null || true`,
-      { encoding: 'utf-8', timeout: 3000 }
-    ).trim();
-    if (output) {
+    const { stdout } = await execFileAsync('pgrep', ['-af', `claude.*--resume.*${sessionId}`], {
+      encoding: 'utf-8',
+      timeout: 3000,
+    });
+    if (stdout.trim()) {
       return `Another claude process is already using session ${sessionId}. Memory changes will not be shared between processes.`;
     }
-  } catch {}
+  } catch { /* pgrep returns exit code 1 when no match — ignore */ }
   return null;
 }
 
@@ -206,7 +202,7 @@ function spawnPty(
   return entry;
 }
 
-function attachWs(entry: PtyEntry, ws: WebSocket) {
+async function attachWs(entry: PtyEntry, ws: WebSocket) {
   // Detach previous ws if any
   if (entry.attachedWs && entry.attachedWs !== ws) {
     sendControl(entry.attachedWs, { type: 'detached' });
@@ -222,14 +218,18 @@ function attachWs(entry: PtyEntry, ws: WebSocket) {
     sendControl(ws, { type: 'scrollback-end' });
   }
 
-  // Tell client we're ready
+  // Tell client we're ready — send immediately, check for external claude in background
   if (entry.exited) {
     sendControl(ws, { type: 'exit', exitCode: entry.exitCode, signal: 0 });
   } else {
-    const warning = detectExternalClaude(entry.sessionId);
-    const readyMsg: Record<string, any> = { type: 'ready', sessionId: entry.sessionId };
-    if (warning) readyMsg.warning = warning;
-    sendControl(ws, readyMsg);
+    // Send ready immediately so terminal is usable right away
+    sendControl(ws, { type: 'ready', sessionId: entry.sessionId });
+    // Check for external claude in background, send warning if found
+    detectExternalClaude(entry.sessionId).then(warning => {
+      if (warning && ws.readyState === WebSocket.OPEN) {
+        sendControl(ws, { type: 'warning', message: warning });
+      }
+    });
   }
 }
 

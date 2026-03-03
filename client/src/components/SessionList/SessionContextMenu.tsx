@@ -5,13 +5,13 @@ interface Props {
   isPinned?: boolean;
   onRename: () => void;
   onPin: () => void;
-  onAddTodo: () => void;
+  onAddTask: () => void;
   onArchive: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-export default function SessionContextMenu({ isArchived, isPinned, onRename, onPin, onAddTodo, onArchive, onDelete, onClose }: Props) {
+export default function SessionContextMenu({ isArchived, isPinned, onRename, onPin, onAddTask, onArchive, onDelete, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,8 +42,8 @@ export default function SessionContextMenu({ isArchived, isPinned, onRename, onP
         </button>
       )}
       {!isArchived && (
-        <button onClick={onAddTodo} className={`${itemClass} text-gray-300`}>
-          Add Todo
+        <button onClick={onAddTask} className={`${itemClass} text-gray-300`}>
+          Add Task
         </button>
       )}
       <button onClick={onArchive} className={`${itemClass} text-gray-300`}>

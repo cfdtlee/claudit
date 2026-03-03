@@ -8,8 +8,15 @@ export type {
   MergedSessionDetail,
   CronTask,
   CronExecution,
-  TodoGroup,
-  TodoItem,
+  TaskGroup,
+  Agent,
+  Project,
+  Task,
+  TaskStatus,
+  TaskSession,
+  ClauditConfig,
+  Checkpoint,
+  DashboardData,
 } from '@shared/types.js';
 
 // Client-only types

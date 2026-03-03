@@ -1,53 +1,51 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { SessionSummary } from '../../types';
-import { createTodo } from '../../api/todo';
+import { createTask } from '../../api/tasks';
 import { fetchSessions } from '../../api/sessions';
 import { useUIStore } from '../../stores/useUIStore';
 
 interface Props {
-  onTodoCreated: (id: string) => void;
+  onTaskCreated: (id: string) => void;
 }
 
-export default function TodoEmptyState({ onTodoCreated }: Props) {
-  const todoDraft = useUIStore(s => s.todoDraft);
-  const setTodoDraft = useUIStore(s => s.setTodoDraft);
-  const todoSessionPrefill = useUIStore(s => s.todoSessionPrefill);
-  const setTodoSessionPrefill = useUIStore(s => s.setTodoSessionPrefill);
+const PRIORITY_NUM: Record<string, number> = { low: 1, medium: 2, high: 3 };
 
-  const [title, setTitle] = useState(() => todoDraft?.title ?? '');
-  const [description, setDescription] = useState(() => todoDraft?.description ?? '');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(() => todoDraft?.priority ?? 'medium');
-  const [selectedSessionId, setSelectedSessionId] = useState(() => todoDraft?.selectedSessionId ?? '');
+export default function TaskEmptyState({ onTaskCreated }: Props) {
+  const taskDraft = useUIStore(s => s.taskDraft);
+  const setTaskDraft = useUIStore(s => s.setTaskDraft);
+
+  const [title, setTitle] = useState(() => taskDraft?.title ?? '');
+  const [description, setDescription] = useState(() => taskDraft?.description ?? '');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(
+    () => {
+      const p = taskDraft?.priority;
+      if (p === 1) return 'low';
+      if (p === 3) return 'high';
+      return 'medium';
+    }
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState(() => taskDraft?.selectedSessionId ?? '');
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load sessions for linking
   useEffect(() => {
     fetchSessions(undefined, true)
       .then(groups => setSessions(groups.flatMap(g => g.sessions)))
       .catch(err => console.error('Failed to load sessions:', err));
   }, []);
 
-  // Apply prefill from session→todo flow
-  useEffect(() => {
-    if (todoSessionPrefill) {
-      setSelectedSessionId(todoSessionPrefill.sessionId);
-    }
-  }, [todoSessionPrefill]);
-
-  // Auto-focus title
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // Persist draft on field changes
+  // Persist draft
   useEffect(() => {
     if (title || description || priority !== 'medium' || selectedSessionId) {
-      setTodoDraft({ title, description, priority, selectedSessionId });
+      setTaskDraft({ title, description, priority: PRIORITY_NUM[priority], selectedSessionId });
     }
-  }, [title, description, priority, selectedSessionId, setTodoDraft]);
+  }, [title, description, priority, selectedSessionId, setTaskDraft]);
 
   const handleSubmit = useCallback(async () => {
     if (!title.trim() || submitting) return;
@@ -66,22 +64,21 @@ export default function TodoEmptyState({ onTodoCreated }: Props) {
         }
       }
 
-      const todo = await createTodo({
+      const task = await createTask({
         title: title.trim(),
         description: description.trim() || undefined,
-        priority,
+        priority: PRIORITY_NUM[priority],
         sessionId,
         sessionLabel,
       });
-      setTodoDraft(null);
-      setTodoSessionPrefill(null);
-      onTodoCreated(todo.id);
+      setTaskDraft(null);
+      onTaskCreated(task.id);
     } catch (err) {
-      console.error('Failed to create todo:', err);
+      console.error('Failed to create task:', err);
     } finally {
       setSubmitting(false);
     }
-  }, [title, description, priority, selectedSessionId, sessions, submitting, onTodoCreated, setTodoDraft, setTodoSessionPrefill]);
+  }, [title, description, priority, selectedSessionId, sessions, submitting, onTaskCreated, setTaskDraft]);
 
   const handleTitleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -170,7 +167,7 @@ export default function TodoEmptyState({ onTodoCreated }: Props) {
             onClick={handleSubmit}
             disabled={!title.trim() || submitting}
             className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 bg-claude hover:bg-claude-hover"
-            title="Create todo (Enter)"
+            title="Create task (Enter)"
           >
             {submitting ? (
               <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">

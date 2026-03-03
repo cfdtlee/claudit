@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type View = 'todo' | 'sessions' | 'cron';
+export type View = 'dashboard' | 'sessions' | 'cron' | 'tasks' | 'agents' | 'settings';
 
 interface SelectedSession {
   projectHash: string;
@@ -12,13 +12,7 @@ interface SelectedSession {
   slugSessionIds?: string[];
 }
 
-interface TodoSessionPrefill {
-  sessionId: string;
-  sessionLabel: string;
-  projectPath: string;
-}
-
-interface PendingTodoPrompt {
+interface PendingTaskPrompt {
   sessionId: string;
   prompt: string;
 }
@@ -30,10 +24,10 @@ export interface SessionDraft {
   branchName: string;
 }
 
-export interface TodoDraft {
+export interface TaskDraft {
   title: string;
   description: string;
-  priority: 'low' | 'medium' | 'high';
+  priority: number;
   selectedSessionId: string;
 }
 
@@ -41,27 +35,29 @@ interface UIState {
   view: View;
   selected: SelectedSession | null;
   selectedCronTaskId: string | null;
-  selectedTodoId: string | null;
+  selectedTaskId: string | null;
+  selectedAgentId: string | null;
+  selectedProjectId: string | null;
   showNewModal: boolean;
-  todoSessionPrefill: TodoSessionPrefill | null;
-  pendingTodoPrompt: PendingTodoPrompt | null;
-  editingTodoId: string | null;
+  pendingTaskPrompt: PendingTaskPrompt | null;
+  editingTaskId: string | null;
   editingCronTaskId: string | null;
   sessionDraft: SessionDraft | null;
-  todoDraft: TodoDraft | null;
+  taskDraft: TaskDraft | null;
 
   setView: (view: View) => void;
   selectSession: (projectHash: string, sessionId: string, projectPath: string, isNew?: boolean, slug?: string, slugSessionIds?: string[]) => void;
   clearSelected: () => void;
   setSelectedCronTaskId: (id: string | null) => void;
-  setSelectedTodoId: (id: string | null) => void;
+  setSelectedTaskId: (id: string | null) => void;
+  setSelectedAgentId: (id: string | null) => void;
+  setSelectedProjectId: (id: string | null) => void;
   setShowNewModal: (show: boolean) => void;
-  setTodoSessionPrefill: (prefill: TodoSessionPrefill | null) => void;
-  setPendingTodoPrompt: (data: PendingTodoPrompt | null) => void;
-  setEditingTodoId: (id: string | null) => void;
+  setPendingTaskPrompt: (data: PendingTaskPrompt | null) => void;
+  setEditingTaskId: (id: string | null) => void;
   setEditingCronTaskId: (id: string | null) => void;
   setSessionDraft: (draft: SessionDraft | null) => void;
-  setTodoDraft: (draft: TodoDraft | null) => void;
+  setTaskDraft: (draft: TaskDraft | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -70,40 +66,44 @@ export const useUIStore = create<UIState>()(
       view: 'sessions',
       selected: null,
       selectedCronTaskId: null,
-      selectedTodoId: null,
+      selectedTaskId: null,
+      selectedAgentId: null,
+      selectedProjectId: null,
       showNewModal: false,
-      todoSessionPrefill: null,
-      pendingTodoPrompt: null,
-      editingTodoId: null,
+      pendingTaskPrompt: null,
+      editingTaskId: null,
       editingCronTaskId: null,
       sessionDraft: null,
-      todoDraft: null,
+      taskDraft: null,
 
       setView: (view) => set({ view }),
       selectSession: (projectHash, sessionId, projectPath, isNew, slug, slugSessionIds) =>
         set({ selected: { projectHash, sessionId, projectPath, isNew, slug, slugSessionIds } }),
       clearSelected: () => set({ selected: null }),
       setSelectedCronTaskId: (id) => set({ selectedCronTaskId: id }),
-      setSelectedTodoId: (id) => set({ selectedTodoId: id }),
+      setSelectedTaskId: (id) => set({ selectedTaskId: id }),
+      setSelectedAgentId: (id) => set({ selectedAgentId: id }),
+      setSelectedProjectId: (id) => set({ selectedProjectId: id }),
       setShowNewModal: (show) => set({ showNewModal: show }),
-      setTodoSessionPrefill: (prefill) => set({ todoSessionPrefill: prefill }),
-      setPendingTodoPrompt: (data) => set({ pendingTodoPrompt: data }),
-      setEditingTodoId: (id) => set({ editingTodoId: id }),
+      setPendingTaskPrompt: (data) => set({ pendingTaskPrompt: data }),
+      setEditingTaskId: (id) => set({ editingTaskId: id }),
       setEditingCronTaskId: (id) => set({ editingCronTaskId: id }),
       setSessionDraft: (draft) => set({ sessionDraft: draft }),
-      setTodoDraft: (draft) => set({ todoDraft: draft }),
+      setTaskDraft: (draft) => set({ taskDraft: draft }),
     }),
     {
       name: 'claudit:ui-state',
       partialize: (state) => ({
         view: state.view,
         selected: state.selected,
-        selectedTodoId: state.selectedTodoId,
         selectedCronTaskId: state.selectedCronTaskId,
-        editingTodoId: state.editingTodoId,
+        selectedTaskId: state.selectedTaskId,
+        selectedAgentId: state.selectedAgentId,
+        selectedProjectId: state.selectedProjectId,
+        editingTaskId: state.editingTaskId,
         editingCronTaskId: state.editingCronTaskId,
         sessionDraft: state.sessionDraft,
-        todoDraft: state.todoDraft,
+        taskDraft: state.taskDraft,
       }),
     },
   ),

@@ -1,25 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TodoItem, SessionSummary } from '../../types';
+import { Task, SessionSummary } from '../../types';
+
+const PRIORITY_MAP: Record<number, string> = { 1: 'low', 2: 'medium', 3: 'high' };
+const PRIORITY_NUM: Record<string, number> = { low: 1, medium: 2, high: 3 };
 
 interface Props {
-  initial?: TodoItem;
+  initial?: Partial<Task>;
   sessions?: SessionSummary[];
   prefillSessionId?: string;
-  onSubmit: (data: {
-    title: string;
-    description?: string;
-    priority: 'low' | 'medium' | 'high';
-    sessionId?: string;
-    sessionLabel?: string;
-  }) => void;
+  onSubmit: (data: Partial<Task>) => void;
   onCancel: () => void;
   onCreateSession?: () => void;
 }
 
-export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit, onCancel, onCreateSession }: Props) {
+export default function TaskForm({ initial, sessions, prefillSessionId, onSubmit, onCancel, onCreateSession }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(initial?.priority ?? 'medium');
+  const [priority, setPriority] = useState<string>(
+    PRIORITY_MAP[initial?.priority ?? 2] ?? 'medium'
+  );
   const [selectedSessionId, setSelectedSessionId] = useState(initial?.sessionId ?? prefillSessionId ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -31,10 +30,8 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
     }
   }, []);
 
-  // Auto-resize on mount (for pre-filled content)
   useEffect(() => { autoResize(); }, [autoResize]);
 
-  // When prefillSessionId changes (e.g. from session→todo flow), update selection
   useEffect(() => {
     if (prefillSessionId) {
       setSelectedSessionId(prefillSessionId);
@@ -50,9 +47,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
   };
 
   const handleFormKeyDown = (e: React.KeyboardEvent) => {
-    // Prevent Enter from submitting, require Cmd+Enter
     if (e.key === 'Enter' && !e.metaKey) {
-      // Allow Enter in textarea (description) for newlines
       if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
       e.preventDefault();
     }
@@ -86,7 +81,7 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
     onSubmit({
       title: title.trim(),
       description: description.trim() || undefined,
-      priority,
+      priority: PRIORITY_NUM[priority],
       sessionId,
       sessionLabel,
     });
@@ -181,8 +176,8 @@ export default function TodoForm({ initial, sessions, prefillSessionId, onSubmit
           disabled={!title.trim()}
           className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
         >
-          {initial ? 'Save' : 'Create'}
-          <kbd className="text-[10px] opacity-70 bg-white/10 px-1 rounded">⌘↵</kbd>
+          {initial?.id ? 'Save' : 'Create'}
+          <kbd className="text-[10px] opacity-70 bg-white/10 px-1 rounded">&#x2318;&#x21B5;</kbd>
         </button>
       </div>
     </form>

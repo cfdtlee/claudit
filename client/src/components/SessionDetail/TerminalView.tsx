@@ -20,8 +20,8 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'exited' | 'error'>('connecting');
 
-  const pendingTodoPrompt = useUIStore(s => s.pendingTodoPrompt);
-  const setPendingTodoPrompt = useUIStore(s => s.setPendingTodoPrompt);
+  const pendingTaskPrompt = useUIStore(s => s.pendingTaskPrompt);
+  const setPendingTaskPrompt = useUIStore(s => s.setPendingTaskPrompt);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -135,15 +135,15 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
               fitAddonRef.current?.fit();
               termRef.current?.scrollToBottom();
             }, 50);
-            // Pre-fill pending todo prompt (no Enter — user reviews and submits)
+            // Pre-fill pending task prompt (no Enter — user reviews and submits)
             {
-              const pending = useUIStore.getState().pendingTodoPrompt;
+              const pending = useUIStore.getState().pendingTaskPrompt;
               if (pending && pending.sessionId === sessionId) {
                 setTimeout(() => {
                   if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'input', data: pending.prompt }));
                   }
-                  useUIStore.getState().setPendingTodoPrompt(null);
+                  useUIStore.getState().setPendingTaskPrompt(null);
                 }, 1500);
               }
             }

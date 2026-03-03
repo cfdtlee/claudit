@@ -1,6 +1,7 @@
 import { ProjectGroup, SessionSummary } from '../types.js';
 import { getManagedSessionMap, getArchivedSessionIds, getPinnedSessionIds } from './managedSessions.js';
 import { scanProjectSessions, getLastRecordState } from './sessionScanner.js';
+import { getMayorSessionId } from './mayorService.js';
 import path from 'path';
 import os from 'os';
 
@@ -139,18 +140,27 @@ function overlayRunningStatus(groups: ProjectGroup[]): ProjectGroup[] {
   }));
 }
 
-/** Overlay pinned status and sort pinned sessions first within each group */
+/** Overlay pinned status and sort pinned sessions first within each group.
+ *  Mayor session is always pinned and sorted above all others. */
 function overlayPinnedStatus(groups: ProjectGroup[]): ProjectGroup[] {
   const pinned = getPinnedSessionIds();
-  if (pinned.size === 0) return groups;
+  const mayorId = getMayorSessionId();
   return groups.map(g => {
-    const sessions = g.sessions.map(s =>
-      pinned.has(s.sessionId) ? { ...s, pinned: true } : s
-    );
+    const sessions = g.sessions.map(s => {
+      const ids = s.slugSessionIds || [s.sessionId];
+      const isMayor = mayorId != null && ids.includes(mayorId);
+      const isPinned = isMayor || pinned.has(s.sessionId);
+      if (!isPinned && !isMayor) return s;
+      return { ...s, pinned: isPinned || undefined, isMayor: isMayor || undefined };
+    });
     sessions.sort((a, b) => {
+      // Mayor always first
+      if (a.isMayor && !b.isMayor) return -1;
+      if (!a.isMayor && b.isMayor) return 1;
+      // Then pinned
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      return 0; // preserve existing order within same pin status
+      return 0;
     });
     return { ...g, sessions };
   });

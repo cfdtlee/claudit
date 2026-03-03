@@ -7,21 +7,23 @@ import {
   createExecution,
   updateExecution,
 } from './cronStorage.js';
-import { getAllTodos } from './todoStorage.js';
+import { getAllTasks as getAllTaskItems } from './taskStorage.js';
 import { addManagedSession, renameManagedSession } from './managedSessions.js';
 import { invalidateSessionCache } from './historyIndex.js';
 
 const scheduledJobs = new Map<string, ScheduledTask>();
 const MAX_OUTPUT_SIZE = 512 * 1024; // 512 KB limit per stream
 
+const PRIORITY_LABELS: Record<number, string> = { 1: 'low', 2: 'medium', 3: 'high' };
 const PRIORITY_ICON: Record<string, string> = { high: '🔴', medium: '🟡', low: '🟢' };
 
 function formatTodosForPrompt(): string {
-  const todos = getAllTodos().filter(t => !t.completed);
-  if (todos.length === 0) return '(No pending todos)';
-  return todos.map((t, i) => {
-    const icon = PRIORITY_ICON[t.priority] || '⚪';
-    let line = `${i + 1}. ${icon} [${t.priority}] ${t.title}`;
+  const tasks = getAllTaskItems().filter(t => t.status !== 'done' && t.status !== 'cancelled');
+  if (tasks.length === 0) return '(No pending todos)';
+  return tasks.map((t, i) => {
+    const pri = PRIORITY_LABELS[t.priority ?? 2] ?? 'medium';
+    const icon = PRIORITY_ICON[pri] || '⚪';
+    let line = `${i + 1}. ${icon} [${pri}] ${t.title}`;
     if (t.description) line += `\n   ${t.description}`;
     return line;
   }).join('\n');

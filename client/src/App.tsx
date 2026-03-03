@@ -6,8 +6,12 @@ import SessionDetail from './components/SessionDetail/SessionDetail';
 import EmptyState from './components/SessionDetail/EmptyState';
 import CronTaskList from './components/CronTasks/CronTaskList';
 import CronTaskDetail from './components/CronTasks/CronTaskDetail';
-import TodoList from './components/TodoList/TodoList';
-import TodoDetail from './components/TodoList/TodoDetail';
+import TaskList from './components/Tasks/TaskList';
+import TaskDetail from './components/Tasks/TaskDetail';
+import AgentList from './components/Agents/AgentList';
+import AgentDetail from './components/Agents/AgentDetail';
+import SettingsPage from './components/Settings/SettingsPage';
+import DashboardPage from './components/Dashboard/DashboardPage';
 import { useUIStore } from './stores/useUIStore';
 import { useSessionStore } from './stores/useSessionStore';
 import { requestNotificationPermission } from './utils/notifications';
@@ -17,8 +21,10 @@ export default function App() {
   const selected = useUIStore(s => s.selected);
   const selectedCronTaskId = useUIStore(s => s.selectedCronTaskId);
   const setSelectedCronTaskId = useUIStore(s => s.setSelectedCronTaskId);
-  const selectedTodoId = useUIStore(s => s.selectedTodoId);
-  const setSelectedTodoId = useUIStore(s => s.setSelectedTodoId);
+  const selectedTaskId = useUIStore(s => s.selectedTaskId);
+  const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
+  const selectedAgentId = useUIStore(s => s.selectedAgentId);
+  const setSelectedAgentId = useUIStore(s => s.setSelectedAgentId);
 
   const selectSession = useUIStore(s => s.selectSession);
   const createSession = useSessionStore(s => s.createSession);
@@ -62,8 +68,10 @@ export default function App() {
         const currentView = useUIStore.getState().view;
         if (currentView === 'sessions') {
           useUIStore.getState().clearSelected();
-        } else if (currentView === 'todo') {
-          useUIStore.getState().setSelectedTodoId(null);
+        } else if (currentView === 'tasks') {
+          useUIStore.getState().setSelectedTaskId(null);
+        } else if (currentView === 'agents') {
+          useUIStore.getState().setSelectedAgentId(null);
         }
       }
     };
@@ -85,55 +93,64 @@ export default function App() {
   }, [createSession, selectSession]);
 
   const renderSidebar = () => {
-    if (view === 'todo') {
-      return (
-        <TodoList
-          selectedTodoId={selectedTodoId}
-          onSelect={setSelectedTodoId}
-        />
-      );
+    switch (view) {
+      case 'dashboard':
+        return null;
+      case 'sessions':
+        return <SessionList />;
+      case 'cron':
+        return <CronTaskList selectedTaskId={selectedCronTaskId} onSelect={setSelectedCronTaskId} />;
+      case 'tasks':
+        return <TaskList selectedTaskId={selectedTaskId} onSelect={setSelectedTaskId} />;
+      case 'agents':
+        return <AgentList selectedAgentId={selectedAgentId} onSelect={setSelectedAgentId} />;
+      case 'settings':
+        return null;
+      default:
+        return null;
     }
-    if (view === 'sessions') {
-      return <SessionList />;
-    }
-    return (
-      <CronTaskList
-        selectedTaskId={selectedCronTaskId}
-        onSelect={setSelectedCronTaskId}
-      />
-    );
   };
 
   const renderMain = () => {
-    if (view === 'todo') {
-      return (
-        <TodoDetail
-          todoId={selectedTodoId}
-          onTodoDeleted={() => setSelectedTodoId(null)}
-          onTodoCreated={(id) => setSelectedTodoId(id)}
-        />
-      );
+    switch (view) {
+      case 'dashboard':
+        return <DashboardPage />;
+      case 'sessions':
+        return selected ? (
+          <SessionDetail
+            projectHash={selected.projectHash}
+            sessionId={selected.sessionId}
+            projectPath={selected.projectPath}
+            isNew={selected.isNew}
+            slug={selected.slug}
+            slugSessionIds={selected.slugSessionIds}
+          />
+        ) : (
+          <EmptyState onCreateSession={handleCreateFromEmpty} />
+        );
+      case 'cron':
+        return <CronTaskDetail taskId={selectedCronTaskId} onTaskDeleted={() => setSelectedCronTaskId(null)} />;
+      case 'tasks':
+        return (
+          <TaskDetail
+            taskId={selectedTaskId}
+            onTaskDeleted={() => setSelectedTaskId(null)}
+            onTaskCreated={(id) => setSelectedTaskId(id)}
+          />
+        );
+      case 'agents':
+        return (
+          <AgentDetail
+            agentId={selectedAgentId}
+            onAgentDeleted={() => setSelectedAgentId(null)}
+            onAgentCreated={(id) => setSelectedAgentId(id)}
+          />
+        );
+      case 'settings':
+        return <SettingsPage />;
+      default:
+        return null;
     }
-    if (view === 'sessions') {
-      return selected ? (
-        <SessionDetail
-          projectHash={selected.projectHash}
-          sessionId={selected.sessionId}
-          projectPath={selected.projectPath}
-          isNew={selected.isNew}
-          slug={selected.slug}
-          slugSessionIds={selected.slugSessionIds}
-        />
-      ) : (
-        <EmptyState onCreateSession={handleCreateFromEmpty} />
-      );
-    }
-    return (
-      <CronTaskDetail
-        taskId={selectedCronTaskId}
-        onTaskDeleted={() => setSelectedCronTaskId(null)}
-      />
-    );
   };
 
   return (

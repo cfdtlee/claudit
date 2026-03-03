@@ -4,7 +4,7 @@ import os from 'os';
 import { EventEmitter } from 'events';
 
 // Resolve claude binary path at startup so spawn can find it
-const CLAUDE_BIN = (() => {
+export const CLAUDE_BIN = (() => {
   try {
     return execSync('which claude', { encoding: 'utf-8' }).trim();
   } catch {

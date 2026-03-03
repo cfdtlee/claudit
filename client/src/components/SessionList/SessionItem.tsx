@@ -36,7 +36,7 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
 
   const selected = useUIStore(s => s.selected);
   const selectSession = useUIStore(s => s.selectSession);
-  const setTodoSessionPrefill = useUIStore(s => s.setTodoSessionPrefill);
+  const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
   const setView = useUIStore(s => s.setView);
   const renameSession = useSessionStore(s => s.renameSession);
   const pinSession = useSessionStore(s => s.pinSession);
@@ -97,14 +97,10 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
     }
   };
 
-  const handleAddTodo = () => {
+  const handleAddTask = () => {
     setShowMenu(false);
-    setTodoSessionPrefill({
-      sessionId: session.sessionId,
-      sessionLabel: session.displayName || session.lastMessage,
-      projectPath: session.projectPath,
-    });
-    setView('todo');
+    setSelectedTaskId(null);
+    setView('tasks');
   };
 
   const displayText = session.displayName || session.lastMessage;
@@ -120,7 +116,7 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
   return (
     <div
       className={`group relative w-full text-left border-b border-gray-800/50 transition-colors cursor-pointer
-        ${multiSelected ? 'bg-gray-800/70 ring-1 ring-claude/30' : ''}
+        ${multiSelected ? 'bg-claude/10 border-l-2 border-l-claude' : ''}
         ${isSelected && !multiSelected ? 'bg-claude/10 border-l-2 border-l-claude' : ''}
         ${!isSelected && !multiSelected ? 'hover:bg-gray-800/50' : ''}`}
       onMouseDown={handleMouseDown}
@@ -142,11 +138,13 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
         ) : (
           <div className="flex items-center gap-2">
             {statusEmoji && <span className="text-sm flex-shrink-0" title={session.status}>{statusEmoji}</span>}
-            {session.pinned && (
+            {session.isMayor ? (
+              <span className="text-xs text-claude font-bold flex-shrink-0" title="Mayor">M</span>
+            ) : session.pinned ? (
               <svg className="w-3 h-3 text-claude flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
               </svg>
-            )}
+            ) : null}
             <div className="text-sm text-gray-300 truncate leading-snug flex-1">
               {displayText}
             </div>
@@ -183,7 +181,7 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
             setShowMenu(false);
             pinSession(session.sessionId);
           }}
-          onAddTodo={handleAddTodo}
+          onAddTask={handleAddTask}
           onArchive={() => {
             setShowMenu(false);
             if (isArchived) {

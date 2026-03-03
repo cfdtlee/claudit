@@ -86,7 +86,151 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_managed_sessions_pinned ON managed_sessions(pinned);
     `);
   },
-  // Future migrations start here
+  // v1 → v2: agents, projects, tasks, task_sessions, settings
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        avatar TEXT,
+        specialty TEXT,
+        systemPrompt TEXT NOT NULL DEFAULT '',
+        recentSummary TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        lastActiveAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        repoPath TEXT NOT NULL,
+        branch TEXT,
+        defaultAgentId TEXT REFERENCES agents(id) ON DELETE SET NULL,
+        defaultModel TEXT,
+        defaultPermissionMode TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        prompt TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_by TEXT NOT NULL DEFAULT 'human',
+        errorMessage TEXT,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        priority INTEGER,
+        parent_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+        discovered_from TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+        blocked_by TEXT,
+        assignee TEXT REFERENCES agents(id) ON DELETE SET NULL,
+        projectId TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        sessionId TEXT,
+        worktreeId TEXT,
+        branch TEXT,
+        prUrl TEXT,
+        workingDir TEXT,
+        model TEXT,
+        permissionMode TEXT,
+        retryCount INTEGER NOT NULL DEFAULT 0,
+        maxRetries INTEGER,
+        timeoutMs INTEGER,
+        taskType TEXT,
+        resultSummary TEXT,
+        resultPath TEXT,
+        filesChanged TEXT,
+        diffSummary TEXT,
+        tokenUsage INTEGER,
+        completionMode TEXT DEFAULT 'declared',
+        acceptanceCriteria TEXT,
+        tags TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        startedAt TEXT,
+        completedAt TEXT,
+        dueDate TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS task_sessions (
+        id TEXT PRIMARY KEY,
+        taskId TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        sessionId TEXT NOT NULL,
+        agentId TEXT REFERENCES agents(id) ON DELETE SET NULL,
+        startedAt TEXT NOT NULL,
+        endedAt TEXT,
+        resultSummary TEXT,
+        resultPath TEXT,
+        tokenUsage INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_projectId ON tasks(projectId);
+      CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_task_sessions_taskId ON task_sessions(taskId);
+    `);
+  },
+  // v2 → v3: task_sessions checkpoints column
+  (db) => {
+    db.exec(`
+      ALTER TABLE task_sessions ADD COLUMN checkpoints TEXT;
+    `);
+  },
+  // v3 → v4: merge Todo into Task — add todo-specific columns, migrate data, drop todos table
+  (db) => {
+    // Add new columns to tasks
+    db.exec(`
+      ALTER TABLE tasks ADD COLUMN description TEXT;
+      ALTER TABLE tasks ADD COLUMN groupId TEXT REFERENCES todo_groups(id) ON DELETE SET NULL;
+      ALTER TABLE tasks ADD COLUMN sessionLabel TEXT;
+      CREATE INDEX IF NOT EXISTS idx_tasks_groupId ON tasks(groupId);
+    `);
+
+    // Migrate existing todos into tasks
+    const priorityMap: Record<string, number> = { low: 1, medium: 2, high: 3 };
+    const todos = db.prepare('SELECT * FROM todos').all() as any[];
+    const insertTask = db.prepare(`
+      INSERT INTO tasks (
+        id, title, description, prompt, status, created_by, "order", priority,
+        groupId, sessionId, sessionLabel, retryCount,
+        createdAt, updatedAt, completedAt
+      ) VALUES (
+        @id, @title, @description, @prompt, @status, @created_by, @order, @priority,
+        @groupId, @sessionId, @sessionLabel, @retryCount,
+        @createdAt, @updatedAt, @completedAt
+      )
+    `);
+    for (const todo of todos) {
+      insertTask.run({
+        id: todo.id,
+        title: todo.title,
+        description: todo.description ?? null,
+        prompt: null,
+        status: todo.completed === 1 ? 'done' : 'pending',
+        created_by: 'human',
+        order: todo.position ?? 0,
+        priority: priorityMap[todo.priority] ?? 2,
+        groupId: todo.groupId ?? null,
+        sessionId: todo.sessionId ?? null,
+        sessionLabel: todo.sessionLabel ?? null,
+        retryCount: 0,
+        createdAt: todo.createdAt,
+        updatedAt: todo.createdAt,
+        completedAt: todo.completedAt ?? null,
+      });
+    }
+
+    // Drop the todos table (groups table kept for task grouping)
+    db.exec('DROP TABLE IF EXISTS todos;');
+  },
 ];
 
 function runMigrations() {

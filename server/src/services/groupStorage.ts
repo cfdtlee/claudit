@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { TodoGroup } from '../types.js';
+import { TaskGroup } from '../types.js';
 import { db } from './database.js';
 
 const stmtAll = db.prepare('SELECT * FROM todo_groups ORDER BY position ASC, createdAt ASC');
@@ -12,7 +12,7 @@ const stmtUpdate = db.prepare('UPDATE todo_groups SET name = ?, position = ? WHE
 const stmtDelete = db.prepare('DELETE FROM todo_groups WHERE id = ?');
 const stmtMaxPosition = db.prepare('SELECT COALESCE(MAX(position), 0) as maxPos FROM todo_groups');
 
-function rowToGroup(row: any): TodoGroup {
+function rowToGroup(row: any): TaskGroup {
   return {
     id: row.id,
     name: row.name,
@@ -21,18 +21,18 @@ function rowToGroup(row: any): TodoGroup {
   };
 }
 
-export function getAllGroups(): TodoGroup[] {
+export function getAllGroups(): TaskGroup[] {
   return stmtAll.all().map(rowToGroup);
 }
 
-export function getGroup(id: string): TodoGroup | undefined {
+export function getGroup(id: string): TaskGroup | undefined {
   const row = stmtById.get(id);
   return row ? rowToGroup(row) : undefined;
 }
 
-export function createGroup(name: string): TodoGroup {
+export function createGroup(name: string): TaskGroup {
   const maxPos = (stmtMaxPosition.get() as any)?.maxPos ?? 0;
-  const group: TodoGroup = {
+  const group: TaskGroup = {
     id: crypto.randomUUID(),
     name,
     position: maxPos + 1000,
@@ -42,7 +42,7 @@ export function createGroup(name: string): TodoGroup {
   return group;
 }
 
-export function updateGroup(id: string, updates: { name?: string; position?: number }): TodoGroup | null {
+export function updateGroup(id: string, updates: { name?: string; position?: number }): TaskGroup | null {
   const existing = getGroup(id);
   if (!existing) return null;
   const merged = {

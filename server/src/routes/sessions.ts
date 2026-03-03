@@ -3,14 +3,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
-const CLAUDE_BIN = (() => {
-  try {
-    return execSync('which claude', { encoding: 'utf-8' }).trim();
-  } catch {
-    return 'claude';
-  }
-})();
+import { CLAUDE_BIN } from '../services/claudeProcess.js';
 import { getSessionIndex, invalidateSessionCache } from '../services/historyIndex.js';
 import { parseSession } from '../services/sessionParser.js';
 import { getSlugFromSession } from '../services/sessionScanner.js';
