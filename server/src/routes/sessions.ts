@@ -83,6 +83,8 @@ router.post('/new', (req, res) => {
     }
     if (permissionMode && typeof permissionMode === 'string') {
       cliFlags.push('--permission-mode', permissionMode);
+    } else {
+      cliFlags.push('--dangerously-skip-permissions');
     }
 
     let result: string;

@@ -24,10 +24,10 @@ try {
 import { eventBus } from './services/eventBus.js';
 import { closeDb } from './services/database.js';
 import { startWitness, stopWitness, witnessEmitter } from './services/witnessService.js';
-import { ensureMayorRunning, stopMayor } from './services/mayorService.js';
+import { ensureMayorRunning, stopMayor, sendToMayor } from './services/mayorService.js';
 import { updateTask, getTask, getAllTasks } from './services/taskStorage.js';
 import { getAgent } from './services/agentStorage.js';
-import { getSetting } from './services/settingsStorage.js';
+import { getSetting, getSettingsObject } from './services/settingsStorage.js';
 import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions } from './services/sessionManager.js';
 import { getAllMessages, markMessageRead, createMessage } from './services/messageStorage.js';
 
@@ -261,15 +261,17 @@ server.listen(PORT, () => {
     // 2. Broadcast to frontend
     broadcastEvent({ type: 'task_updated', taskId });
 
-    // 3. If mayorAutoExecute is enabled, notify Mayor via DB mailbox
-    if (getSetting('mayorAutoExecute') === 'true') {
-      createMessage({
-        type: 'event',
-        source: 'witness',
-        subject: `Task unblocked: ${taskId}`,
-        body: `Task ${taskId} is now unblocked. Check pending tasks and schedule execution.`,
-      });
-    }
+    // 3. Notify Mayor that a task is unblocked
+    const unblockedMsg = `Task ${taskId} is now unblocked. Use get_tasks() to review and assign/spawn it.`;
+    createMessage({
+      type: 'event',
+      source: 'witness',
+      subject: `Task unblocked: ${taskId}`,
+      body: unblockedMsg,
+    });
+    sendToMayor(unblockedMsg).catch(err => {
+      console.error('[witness] Failed to notify Mayor:', err);
+    });
   });
 
   // Forward claudit events to WebSocket clients
@@ -324,8 +326,8 @@ server.listen(PORT, () => {
   }, 2000);
 
   // Mayor Patrol: periodically check for pending tasks and notify Mayor
-  const PATROL_INTERVAL = parseInt(process.env.MAYOR_PATROL_INTERVAL_MS ?? '300000');
-  const patrolTimer = setInterval(() => {
+  const PATROL_INTERVAL = getSettingsObject().patrolIntervalMs ?? 300000;
+  let patrolTimer = setInterval(() => {
     try {
       const pendingTasks = getAllTasks().filter(t => t.status === 'pending');
       if (pendingTasks.length === 0) return;
@@ -334,11 +336,15 @@ server.listen(PORT, () => {
         `- [${t.id.slice(0, 8)}] "${t.title}" assignee=${t.assignee ?? 'unassigned'}`
       ).join('\n');
 
+      const patrolMsg = `Patrol check: ${pendingTasks.length} pending task(s) found.\n${summary}\n\nPlease use get_tasks() to review and assign/spawn them as needed.`;
       createMessage({
         type: 'event',
         source: 'patrol',
         subject: 'patrol',
-        body: `Patrol check: ${pendingTasks.length} pending task(s) found.\n${summary}\n\nPlease use get_tasks() to review and assign/spawn them as needed.`,
+        body: patrolMsg,
+      });
+      sendToMayor(patrolMsg).catch(err => {
+        console.error('[patrol] Failed to notify Mayor:', err);
       });
 
       console.log(`[patrol] Notified Mayor of ${pendingTasks.length} pending tasks`);

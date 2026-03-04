@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import NavSidebar from './components/NavSidebar';
@@ -27,6 +27,8 @@ export default function App() {
   const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
   const selectedAgentId = useUIStore(s => s.selectedAgentId);
   const setSelectedAgentId = useUIStore(s => s.setSelectedAgentId);
+
+  const [taskRefreshTrigger, setTaskRefreshTrigger] = useState(0);
 
   const selectSession = useUIStore(s => s.selectSession);
   const createSession = useSessionStore(s => s.createSession);
@@ -103,7 +105,7 @@ export default function App() {
       case 'cron':
         return <CronTaskList selectedTaskId={selectedCronTaskId} onSelect={setSelectedCronTaskId} />;
       case 'tasks':
-        return <TaskList selectedTaskId={selectedTaskId} onSelect={setSelectedTaskId} />;
+        return <TaskList selectedTaskId={selectedTaskId} onSelect={setSelectedTaskId} refreshTrigger={taskRefreshTrigger} />;
       case 'agents':
         return <AgentList selectedAgentId={selectedAgentId} onSelect={setSelectedAgentId} />;
       case 'settings':
@@ -131,13 +133,14 @@ export default function App() {
           <EmptyState onCreateSession={handleCreateFromEmpty} />
         );
       case 'cron':
-        return <CronTaskDetail taskId={selectedCronTaskId} onTaskDeleted={() => setSelectedCronTaskId(null)} />;
+        return <CronTaskDetail taskId={selectedCronTaskId} onTaskDeleted={() => setSelectedCronTaskId(null)} onTaskCreated={(id) => setSelectedCronTaskId(id)} />;
       case 'tasks':
         return (
           <TaskDetail
             taskId={selectedTaskId}
-            onTaskDeleted={() => setSelectedTaskId(null)}
-            onTaskCreated={(id) => setSelectedTaskId(id)}
+            onTaskDeleted={() => { setSelectedTaskId(null); setTaskRefreshTrigger(n => n + 1); }}
+            onTaskCreated={(id) => { setSelectedTaskId(id); setTaskRefreshTrigger(n => n + 1); }}
+            onTaskUpdated={() => setTaskRefreshTrigger(n => n + 1)}
           />
         );
       case 'agents':

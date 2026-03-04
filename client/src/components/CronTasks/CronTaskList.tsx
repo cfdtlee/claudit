@@ -1,20 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CronTask } from '../../types';
-import { fetchCronTasks, createCronTask } from '../../api/cron';
-import { cn } from '../../lib/utils';
+import { fetchCronTasks } from '../../api/cron';
 import { Plus, Loader2, Workflow } from 'lucide-react';
 import CronTaskItem from './CronTaskItem';
-import CronTaskForm from './CronTaskForm';
 
 interface Props {
   selectedTaskId: string | null;
-  onSelect: (taskId: string) => void;
+  onSelect: (taskId: string | null) => void;
 }
 
 export default function CronTaskList({ selectedTaskId, onSelect }: Props) {
   const [tasks, setTasks] = useState<CronTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -33,48 +30,17 @@ export default function CronTaskList({ selectedTaskId, onSelect }: Props) {
     return () => clearInterval(interval);
   }, [loadTasks]);
 
-  const handleCreate = async (data: {
-    name: string;
-    cronExpression: string;
-    prompt: string;
-    projectPath?: string;
-    enabled: boolean;
-  }) => {
-    try {
-      const task = await createCronTask(data);
-      setTasks(prev => [...prev, task]);
-      setShowForm(false);
-      onSelect(task.id);
-    } catch (err) {
-      console.error('Failed to create task:', err);
-    }
-  };
-
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-border/50 flex items-center justify-between">
         <h2 className="text-base font-semibold text-foreground">Cron Tasks</h2>
         <button
-          onClick={() => setShowForm(!showForm)}
-          className={cn(
-            'text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1',
-            showForm
-              ? 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20'
-          )}
+          onClick={() => onSelect(null)}
+          className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20"
         >
-          {showForm ? 'Cancel' : <><Plus className="w-3 h-3" /> New</>}
+          <Plus className="w-3 h-3" /> New
         </button>
       </div>
-
-      {showForm && (
-        <div className="p-4 border-b border-border/50 bg-card/50 animate-slide-in">
-          <CronTaskForm
-            onSubmit={handleCreate}
-            onCancel={() => setShowForm(false)}
-          />
-        </div>
-      )}
 
       <div className="flex-1 sidebar-scroll">
         {loading ? (

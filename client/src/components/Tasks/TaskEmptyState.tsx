@@ -94,14 +94,14 @@ export default function TaskEmptyState({ onTaskCreated }: Props) {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-background relative overflow-hidden">
+    <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
       <div className="mb-6">
         <CheckSquare className="w-12 h-12 text-muted-foreground/20" />
       </div>
 
       <div className={cn('w-full max-w-[560px]', submitting && 'glow-border')}>
         <div className={cn(
-          'bg-card rounded-xl border border-border overflow-hidden relative z-[1] shadow-lg shadow-black/20',
+          'bg-card backdrop-blur-xl rounded-xl border border-border overflow-hidden relative z-[1] shadow-lg shadow-black/30',
           submitting && 'glow-border-inner'
         )}>
           {/* Title input */}

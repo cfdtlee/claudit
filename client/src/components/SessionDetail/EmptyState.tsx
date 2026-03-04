@@ -161,7 +161,7 @@ export default function EmptyState({ onCreateSession }: Props) {
       {/* Input card */}
       <div className={cn('w-full max-w-[560px]', submitting && 'glow-border')}>
         <div className={cn(
-          'bg-card/40 backdrop-blur-xl rounded-xl border border-border/30 overflow-hidden relative z-[1] shadow-lg shadow-black/20',
+          'bg-card backdrop-blur-xl rounded-xl border border-border overflow-hidden relative z-[1] shadow-lg shadow-black/30',
           submitting && 'glow-border-inner'
         )}>
           {/* Prompt textarea */}
@@ -273,7 +273,7 @@ export default function EmptyState({ onCreateSession }: Props) {
       {showFolderPicker && (
         <div
           ref={folderRef}
-          className="w-full max-w-[560px] mt-2 bg-card/40 backdrop-blur-xl rounded-xl border border-border/30 p-4 z-10 shadow-xl animate-fade-in"
+          className="w-full max-w-[560px] mt-2 bg-card backdrop-blur-xl rounded-xl border border-border p-4 z-10 shadow-xl animate-fade-in"
         >
           <FolderBrowser onPathChange={handlePathChange} />
           <div className="flex justify-end mt-3">

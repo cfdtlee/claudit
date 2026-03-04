@@ -83,9 +83,10 @@ interface Props {
   taskId: string | null;
   onTaskDeleted: () => void;
   onTaskCreated: (id: string) => void;
+  onTaskUpdated?: () => void;
 }
 
-export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Props) {
+export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated, onTaskUpdated }: Props) {
   const [task, setTask] = useState<(Task & { subtasks?: Task[] }) | null>(null);
   const [taskSessions, setTaskSessions] = useState<TaskSession[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -159,28 +160,22 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
 
   const agentMap = new Map(agents.map(a => [a.id, a]));
   const projectMap = new Map(projects.map(p => [p.id, p]));
+
+  // Find a session by ID, also checking slugSessionIds for merged sessions
+  const findSession = (sid: string) =>
+    sessions.find(s => s.sessionId === sid || s.slugSessionIds?.includes(sid));
   const assignedAgent = task.assignee ? agentMap.get(task.assignee) : undefined;
   const assignedProject = task.projectId ? projectMap.get(task.projectId) : undefined;
   const transitions = TRANSITIONS[task.status] ?? [];
   const isDone = task.status === 'done';
   const priority = PRIORITY_LABELS[task.priority ?? 2] ?? PRIORITY_LABELS[2];
 
-  const handleToggle = async () => {
-    try {
-      const updated = await updateTask(task.id, {
-        status: isDone ? 'pending' : 'done',
-        completedAt: isDone ? undefined : new Date().toISOString(),
-      });
-      setTask(prev => prev ? { ...prev, ...updated } : null);
-    } catch (err) {
-      console.error('Failed to toggle task:', err);
-    }
-  };
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
     try {
       const updated = await updateTaskStatus(task.id, newStatus);
       setTask(prev => prev ? { ...prev, ...updated } : null);
+      onTaskUpdated?.();
     } catch (err) {
       console.error('Failed to update status:', err);
     }
@@ -191,6 +186,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
       const updated = await updateTask(task.id, data);
       setTask(prev => prev ? { ...prev, ...updated } : null);
       setEditing(false);
+      onTaskUpdated?.();
     } catch (err) {
       console.error('Failed to update task:', err);
     }
@@ -274,25 +270,12 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
       {/* Header */}
       <div className="px-6 py-4 border-b border-border">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleToggle}
-              className={cn(
-                'w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
-                isDone
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border-2 border-muted-foreground/30 hover:border-primary/60'
-              )}
-            >
-              {isDone && <CheckCircle2 className="w-4 h-4" />}
-            </button>
-            <h2 className={cn(
-              'text-lg font-semibold',
-              isDone ? 'text-muted-foreground line-through' : 'text-foreground'
-            )}>
-              {task.title}
-            </h2>
-          </div>
+          <h2 className={cn(
+            'text-lg font-semibold',
+            isDone ? 'text-muted-foreground line-through' : 'text-foreground'
+          )}>
+            {task.title}
+          </h2>
           <div className="flex items-center gap-2">
             {!task.sessionId && !isDone && task.status !== 'cancelled' && (
               <button
@@ -388,7 +371,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
         )}
 
         {task.sessionId && (() => {
-          const linkedSession = sessions.find(s => s.sessionId === task.sessionId);
+          const linkedSession = findSession(task.sessionId!);
           return (
             <Collapsible title="Linked Session" defaultOpen storageKey={`claudit:task:${task.id}:session`}>
               <div className="text-sm bg-background/60 rounded-lg p-3 space-y-2 border border-border/50">
@@ -518,20 +501,36 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
         {taskSessions.length > 0 && (
           <Collapsible title={`Session History (${taskSessions.length})`} storageKey={`claudit:task:${task.id}:hist`}>
             <div className="space-y-1.5">
-              {taskSessions.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 bg-background/60 rounded-lg text-sm border border-border/50">
-                  <div className="flex items-center gap-2">
-                    <code className="text-foreground font-mono text-xs">{s.sessionId.slice(0, 8)}</code>
-                    {s.agentId && agentMap.get(s.agentId) && (
-                      <span className="text-muted-foreground">{agentMap.get(s.agentId)!.name}</span>
+              {taskSessions.map(s => {
+                const linked = findSession(s.sessionId);
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      if (linked) {
+                        selectSession(linked.projectHash, linked.sessionId, linked.projectPath);
+                        setView('sessions');
+                      }
+                    }}
+                    className={cn(
+                      'flex items-center justify-between px-3 py-2 bg-background/60 rounded-lg text-sm border border-border/50',
+                      linked && 'cursor-pointer hover:bg-background/80 hover:border-primary/30 transition-colors',
                     )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <code className="text-foreground font-mono text-xs">{s.sessionId.slice(0, 8)}</code>
+                      {s.agentId && agentMap.get(s.agentId) && (
+                        <span className="text-muted-foreground">{agentMap.get(s.agentId)!.name}</span>
+                      )}
+                      {linked && <ExternalLink className="w-3 h-3 text-muted-foreground" />}
+                    </div>
+                    <div className="text-muted-foreground text-xs">
+                      {new Date(s.startedAt).toLocaleString()}
+                      {s.tokenUsage != null && ` \u00B7 ${s.tokenUsage.toLocaleString()} tokens`}
+                    </div>
                   </div>
-                  <div className="text-muted-foreground text-xs">
-                    {new Date(s.startedAt).toLocaleString()}
-                    {s.tokenUsage != null && ` \u00B7 ${s.tokenUsage.toLocaleString()} tokens`}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Collapsible>
         )}

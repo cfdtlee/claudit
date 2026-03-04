@@ -53,6 +53,7 @@ export class ClaudeProcess extends EventEmitter {
       '--output-format', 'stream-json',
       '--input-format', 'stream-json',
       '--verbose',
+      '--dangerously-skip-permissions',
       ...this.extraArgs,
     ], {
       cwd,
@@ -97,6 +98,12 @@ export class ClaudeProcess extends EventEmitter {
 
   /** Restart the process and send a message once ready */
   private restart(content: string) {
+    // Kill old process before spawning new one
+    if (this.proc) {
+      try { this.proc.kill('SIGKILL'); } catch { /* already dead */ }
+      this.proc = null;
+    }
+
     this.userMessageSent = true;
     this.resetTracking();
 
@@ -232,18 +239,17 @@ export class ClaudeProcess extends EventEmitter {
   }
 
   isAlive(): boolean {
-    return this.proc !== null && !this.proc.killed;
+    return this.proc !== null && this.proc.exitCode === null && !this.proc.killed;
   }
 
   stop() {
     if (this.proc) {
-      console.log('[claude] Stopping process');
-      this.proc.kill('SIGTERM');
+      console.log(`[claude] Stopping process pid=${this.proc.pid}`);
+      const p = this.proc;
+      this.proc = null; // Clear reference immediately to prevent reuse
+      try { p.kill('SIGTERM'); } catch { /* already dead */ }
       setTimeout(() => {
-        if (this.proc) {
-          this.proc.kill('SIGKILL');
-          this.proc = null;
-        }
+        try { p.kill('SIGKILL'); } catch { /* already dead */ }
       }, 3000);
     }
   }

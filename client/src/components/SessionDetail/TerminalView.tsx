@@ -19,10 +19,24 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
   const wsRef = useRef<WebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'exited' | 'error'>('connecting');
+  const [showStatusBar, setShowStatusBar] = useState(false);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [termReady, setTermReady] = useState(false);
 
   const pendingTaskPrompt = useUIStore(s => s.pendingTaskPrompt);
   const setPendingTaskPrompt = useUIStore(s => s.setPendingTaskPrompt);
+
+  useEffect(() => {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    if (status === 'connecting') {
+      setShowStatusBar(true);
+    } else if (status === 'error' || status === 'exited') {
+      statusTimerRef.current = setTimeout(() => setShowStatusBar(true), 200);
+    } else {
+      setShowStatusBar(false);
+    }
+    return () => { if (statusTimerRef.current) clearTimeout(statusTimerRef.current); };
+  }, [status]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -169,15 +183,15 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
       setStatus('error');
       setTermReady(true);
       term.writeln('\x1b[31mWebSocket connection error\x1b[0m');
     };
 
     ws.onclose = () => {
-      if (termRef.current) {
-        setStatus('exited');
-      }
+      if (wsRef.current !== ws) return;
+      setStatus('exited');
     };
 
     const inputDisposable = term.onData((data) => {
@@ -221,33 +235,34 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Status bar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-card/30 border-b border-border/30 text-xs shrink-0">
-        <span className={
-          status === 'connected' ? 'text-emerald-400' :
-          status === 'connecting' ? 'text-amber-400' :
-          status === 'error' ? 'text-destructive' :
-          'text-muted-foreground'
-        }>
-          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${
-            status === 'connected' ? 'bg-emerald-400' :
-            status === 'connecting' ? 'bg-amber-400 animate-pulse' :
-            status === 'error' ? 'bg-destructive' :
-            'bg-muted-foreground'
-          }`} />
-          {status === 'connected' ? 'Terminal connected' :
-           status === 'connecting' ? 'Connecting...' :
-           status === 'error' ? 'Connection error' :
-           'Process exited'}
-        </span>
-      </div>
+      {/* Status bar — only shown for error/exited states */}
+      {showStatusBar && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-card/30 border-b border-border/30 text-xs shrink-0">
+          <span className={
+            status === 'connecting' ? 'text-amber-400' :
+            status === 'error' ? 'text-destructive' :
+            'text-muted-foreground'
+          }>
+            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${
+              status === 'connecting' ? 'bg-amber-400 animate-pulse' :
+              status === 'error' ? 'bg-destructive' :
+              'bg-muted-foreground'
+            }`} />
+            {status === 'connecting' ? 'Connecting...' :
+             status === 'error' ? 'Connection error' :
+             'Process exited'}
+          </span>
+        </div>
+      )}
 
-      {/* Terminal container — hidden until scrollback replay finishes to prevent visible scroll */}
-      <div
-        ref={containerRef}
-        className="flex-1 min-h-0"
-        style={{ padding: '8px 10px 8px 10px', visibility: termReady ? 'visible' : 'hidden' }}
-      />
+      {/* Terminal container — padding on wrapper so FitAddon measures correct dimensions */}
+      <div className="flex-1 min-h-0" style={{ padding: '8px 10px' }}>
+        <div
+          ref={containerRef}
+          className="h-full w-full"
+          style={{ visibility: termReady ? 'visible' : 'hidden' }}
+        />
+      </div>
     </div>
   );
 }

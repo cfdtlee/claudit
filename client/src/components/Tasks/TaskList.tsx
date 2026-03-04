@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Task, TaskStatus } from '../../types';
-import { fetchTasks, updateTask, reorderTasks } from '../../api/tasks';
+import { fetchTasks, reorderTasks } from '../../api/tasks';
 import { cn } from '../../lib/utils';
 import {
   Search, X, Plus, Circle, CheckCircle2, Clock, AlertTriangle,
@@ -26,6 +26,7 @@ type Filter = 'all' | 'active' | 'done';
 interface Props {
   selectedTaskId: string | null;
   onSelect: (taskId: string) => void;
+  refreshTrigger?: number;
 }
 
 const PRIORITY_COLORS: Record<number, string> = {
@@ -71,13 +72,24 @@ interface TaskItemProps {
   task: Task;
   selected: boolean;
   onSelect: () => void;
-  onToggle: () => void;
 }
 
-const TaskItem = memo(function TaskItem({ task, selected, onSelect, onToggle }: TaskItemProps) {
-  const isDone = task.status === 'done';
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  pending: '',
+  running: 'Running',
+  waiting: 'Waiting',
+  draft: 'Draft',
+  paused: 'Paused',
+  done: 'Done',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
+const TaskItem = memo(function TaskItem({ task, selected, onSelect }: TaskItemProps) {
+  const isDone = task.status === 'done' || task.status === 'cancelled';
   const isWaiting = task.status === 'waiting';
   const isRunning = task.status === 'running';
+  const showStatus = task.status !== 'pending';
   const timeAgo = getTimeAgo(task.createdAt);
   const StatusIcon = STATUS_ICONS[task.status] ?? Circle;
 
@@ -104,50 +116,38 @@ const TaskItem = memo(function TaskItem({ task, selected, onSelect, onToggle }: 
       {...listeners}
       onClick={onSelect}
       className={cn(
-        'px-3 py-3 cursor-pointer transition-all flex items-start gap-3',
+        'px-3 py-3 cursor-pointer transition-all',
         isWaiting && !selected && 'border-l-2 border-l-red-400 bg-red-500/5',
         isRunning && !selected && 'border-l-2 border-l-blue-400 bg-blue-500/5',
         selected ? 'list-item-selected' : 'list-item-hover'
       )}
     >
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className={cn(
-          'mt-0.5 w-[18px] h-[18px] rounded-full flex-shrink-0 flex items-center justify-center transition-all',
-          isDone
-            ? 'bg-primary text-primary-foreground'
-            : 'border border-muted-foreground/40 hover:border-primary/60'
-        )}
-      >
-        {isDone && <CheckCircle2 className="w-3 h-3" />}
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={cn(
-            'w-1.5 h-1.5 rounded-full flex-shrink-0',
-            PRIORITY_COLORS[task.priority ?? 2] ?? 'bg-muted-foreground/40'
-          )} />
-          <span className={cn(
-            'text-sm truncate',
-            isDone ? 'text-muted-foreground line-through' : 'text-foreground'
-          )}>
-            {task.title}
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          'w-1.5 h-1.5 rounded-full flex-shrink-0',
+          PRIORITY_COLORS[task.priority ?? 2] ?? 'bg-muted-foreground/40'
+        )} />
+        <span className={cn(
+          'text-sm truncate flex-1',
+          isDone ? 'text-muted-foreground line-through' : 'text-foreground'
+        )}>
+          {task.title}
+        </span>
+      </div>
+      <div className="flex items-center justify-between mt-1 ml-3.5">
+        <span className="text-xs text-muted-foreground">{timeAgo}</span>
+        {showStatus && (
+          <span className={cn('text-xs flex items-center gap-1', STATUS_COLORS[task.status])}>
+            <StatusIcon className={cn('w-3 h-3', isRunning && 'animate-spin')} />
+            {STATUS_LABELS[task.status]}
           </span>
-          {(isWaiting || isRunning) && (
-            <StatusIcon className={cn(
-              'w-3.5 h-3.5 flex-shrink-0',
-              STATUS_COLORS[task.status],
-              isRunning && 'animate-spin'
-            )} />
-          )}
-        </div>
-        <div className="text-xs text-muted-foreground mt-1 ml-3.5">{timeAgo}</div>
+        )}
       </div>
     </div>
   );
 });
 
-export default function TaskList({ selectedTaskId, onSelect }: Props) {
+export default function TaskList({ selectedTaskId, onSelect, refreshTrigger }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
@@ -182,18 +182,9 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
     if (selectedTaskId) loadTasks();
   }, [selectedTaskId, loadTasks]);
 
-  const handleToggle = async (task: Task) => {
-    const isDone = task.status === 'done';
-    try {
-      const updated = await updateTask(task.id, {
-        status: isDone ? 'pending' : 'done',
-        completedAt: isDone ? undefined : new Date().toISOString(),
-      });
-      setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-    } catch (err) {
-      console.error('Failed to toggle task:', err);
-    }
-  };
+  useEffect(() => {
+    if (refreshTrigger) loadTasks();
+  }, [refreshTrigger, loadTasks]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -341,7 +332,6 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
                   task={task}
                   selected={task.id === selectedTaskId}
                   onSelect={() => onSelect(task.id)}
-                  onToggle={() => handleToggle(task)}
                 />
               ))}
             </SortableContext>

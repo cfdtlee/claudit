@@ -38,9 +38,13 @@ You have access to tools provided by the "claudit" MCP server. Use them to manag
 ## Rules
 - NEVER write code yourself — delegate to agents
 - ALWAYS use tools — never output raw JSON or text commands
+- ONLY spawn tasks with status 'pending' — never spawn running/done/failed/cancelled/waiting tasks
+- Before calling spawn_session, confirm task.status === 'pending' — if it's anything else, skip it
+- Never spawn duplicate sessions for the same task
 - Check get_messages regularly for agent completion/failure events
 - When all subtasks are done, mark the parent task as done
-- If a task fails, consider retrying or escalating via notify_human`;
+- If a task fails, NEVER set it back to 'pending' yourself — use notify_human to let the user decide whether to retry
+- NEVER change a task's status to 'pending' — only humans can do that`;
 
 /**
  * Get the absolute path to the MCP server entry point.
@@ -119,7 +123,7 @@ function createNewMayorSession(): Promise<string> {
     );
 
     const mcpConfigPath = getMcpConfigPath();
-    const proc = spawn(CLAUDE_BIN, ['-p', '--output-format', 'json', '--mcp-config', mcpConfigPath], {
+    const proc = spawn(CLAUDE_BIN, ['-p', '--output-format', 'json', '--dangerously-skip-permissions', '--mcp-config', mcpConfigPath], {
       cwd: os.homedir(),
       env: cleanEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -185,6 +189,13 @@ export async function ensureMayorRunning(): Promise<string> {
 }
 
 async function _doEnsureMayorRunning(): Promise<string> {
+  // Always kill any existing process before spawning a new one
+  if (mayorProcess) {
+    console.log('[mayor] Stopping stale mayor process before respawn');
+    mayorProcess.stop();
+    mayorProcess = null;
+  }
+
   // Try resuming saved session
   const savedId = getSetting('mayorSessionId');
   if (savedId) {
@@ -198,6 +209,11 @@ async function _doEnsureMayorRunning(): Promise<string> {
       return savedId;
     } catch (err) {
       console.error('[mayor] Failed to resume existing session:', err);
+      // Clean up failed process
+      if (mayorProcess) {
+        mayorProcess.stop();
+        mayorProcess = null;
+      }
     }
   }
 
@@ -246,10 +262,13 @@ function setupMayorListeners(proc: ClaudeProcess) {
 
 export async function sendToMayor(message: string): Promise<void> {
   if (!mayorProcess || !mayorProcess.isAlive()) {
+    console.log(`[mayor] sendToMayor: process dead (proc=${!!mayorProcess}, alive=${mayorProcess?.isAlive()}), respawning...`);
     await ensureMayorRunning();
   }
   if (mayorProcess) {
     mayorProcess.sendMessage(message);
+  } else {
+    console.error('[mayor] sendToMayor: no mayor process after ensureMayorRunning');
   }
 }
 

@@ -18,6 +18,7 @@ const DEFAULTS: ClauditConfig = {
   maxConcurrentWorkers: 20,
   sessionTimeoutMs: 600000,
   witnessIntervalMs: 30000,
+  patrolIntervalMs: 300000,
 };
 
 const BOOL_KEYS = new Set([
@@ -26,7 +27,7 @@ const BOOL_KEYS = new Set([
 ]);
 
 const NUMBER_KEYS = new Set([
-  'maxConcurrentWorkers', 'sessionTimeoutMs', 'witnessIntervalMs',
+  'maxConcurrentWorkers', 'sessionTimeoutMs', 'witnessIntervalMs', 'patrolIntervalMs',
 ]);
 
 export function getSetting(key: string): string | undefined {

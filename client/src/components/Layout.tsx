@@ -98,11 +98,9 @@ export default function Layout({ nav, sidebar, main }: Props) {
 
   return (
     <div className="h-screen flex bg-background relative overflow-hidden">
-      {/* Background gradient orbs */}
+      {/* Background gradient orb — behind everything */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute w-[600px] h-[600px] -top-48 -right-24 rounded-full bg-[#DA7756]/30 blur-[150px] animate-orb-1" />
         <div className="absolute w-[500px] h-[500px] -bottom-32 -left-40 rounded-full bg-[#f5a623]/25 blur-[130px] animate-orb-2" />
-        <div className="absolute w-[350px] h-[350px] top-1/2 left-1/3 -translate-y-1/2 rounded-full bg-[#8b4563]/20 blur-[120px] animate-orb-3" />
       </div>
 
       {/* Nav — deepest layer */}
@@ -134,6 +132,12 @@ export default function Layout({ nav, sidebar, main }: Props) {
               {sidebar}
             </aside>
 
+            {/* Gradient orbs — between list and detail panel so detail glass shows transparency */}
+            <div className="absolute inset-0 pointer-events-none z-[1]" aria-hidden="true">
+              <div className="absolute w-[600px] h-[600px] -top-48 right-[-10%] rounded-full bg-[#DA7756]/30 blur-[150px] animate-orb-1" />
+              <div className="absolute w-[350px] h-[350px] top-1/2 left-[40%] -translate-y-1/2 rounded-full bg-[#8b4563]/20 blur-[120px] animate-orb-3" />
+            </div>
+
             {/* Sidebar resize handle — absolute so no layout gap */}
             <div
               onMouseDown={onSidebarMouseDown}
@@ -141,15 +145,21 @@ export default function Layout({ nav, sidebar, main }: Props) {
               style={{ left: sidebarWidth - 3 }}
             />
 
-            {/* Detail panel — elevated glass overlay */}
-            <main className="overflow-hidden flex flex-col glass-panel-elevated rounded-xl flex-1 min-w-0 my-2.5 mr-2.5">
+            {/* Detail panel — elevated glass overlay, z-[2] above orbs so glass transparency shows them */}
+            <main className="overflow-hidden flex flex-col glass-panel-elevated rounded-xl flex-1 min-w-0 my-2.5 mr-2.5 relative z-[2]">
               {main}
             </main>
           </div>
         ) : (
           /* No sidebar — single glass panel */
-          <main className="overflow-hidden flex flex-col glass-panel rounded-xl h-full">
-            {main}
+          <main className="overflow-hidden flex flex-col glass-panel rounded-xl h-full relative">
+            <div className="absolute inset-0 pointer-events-none z-0" aria-hidden="true">
+              <div className="absolute w-[600px] h-[600px] -top-48 right-[-10%] rounded-full bg-[#DA7756]/30 blur-[150px] animate-orb-1" />
+              <div className="absolute w-[350px] h-[350px] top-1/2 left-[30%] -translate-y-1/2 rounded-full bg-[#8b4563]/20 blur-[120px] animate-orb-3" />
+            </div>
+            <div className="relative z-[1] flex flex-col flex-1 min-h-0">
+              {main}
+            </div>
           </main>
         )}
       </div>

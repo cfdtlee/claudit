@@ -189,6 +189,11 @@ server.tool(
   async ({ taskId, status, assignee, errorMessage, resultSummary }) => {
     let task;
 
+    // Guard: Mayor cannot set tasks back to pending — only humans can
+    if (status === 'pending') {
+      return errorResult(`Cannot set task to 'pending' via MCP. Only humans can reset tasks to pending.`);
+    }
+
     if (status) {
       task = updateTaskStatus(taskId, status as any);
       if (!task) {
@@ -246,14 +251,28 @@ server.tool(
     agentId: z.string().describe('The agent ID to use'),
   },
   async ({ taskId, agentId }) => {
-    // Note: The actual spawning is handled server-side via HTTP.
-    // In MCP context, we create a message requesting the spawn.
-    // The server's event loop will pick this up.
     const task = getTask(taskId);
     if (!task) return errorResult(`Task not found: ${taskId}`);
 
+    // Guard: only allow spawning for pending tasks
+    if (task.status !== 'pending') {
+      return errorResult(`Task "${task.title}" has status '${task.status}' — only 'pending' tasks can be spawned. Do NOT retry.`);
+    }
+
     const agent = getAgent(agentId);
     if (!agent) return errorResult(`Agent not found: ${agentId}`);
+
+    // Guard: check for recent pending spawn_request for the same task to prevent duplicates
+    const recentMessages = getAllMessages({ type: 'event', unreadOnly: true });
+    const hasPending = recentMessages.some(m =>
+      m.source === 'mayor' && m.subject === 'spawn_request' && m.body.includes(taskId)
+    );
+    if (hasPending) {
+      return errorResult(`A spawn request for task "${task.title}" is already pending. Do NOT retry — wait for the server to process it.`);
+    }
+
+    // Mark task as running immediately to prevent duplicate spawns
+    updateTask(taskId, { status: 'running', assignee: agentId });
 
     // Create a spawn request message that the server will process
     createMessage({
@@ -263,10 +282,7 @@ server.tool(
       body: JSON.stringify({ taskId, agentId }),
     });
 
-    // Update task to indicate it's being prepared
-    updateTask(taskId, { assignee: agentId });
-
-    return text(`Spawn request created for task "${task.title}" with agent "${agent.name}". The session will be started by the server. Check get_messages() for status updates.`);
+    return text(`Spawn request created for task "${task.title}" with agent "${agent.name}". The session will be started by the server. Do NOT call spawn_session again for this task — check get_messages() for status updates.`);
   },
 );
 

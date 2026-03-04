@@ -4,7 +4,7 @@ import { fetchSettings, updateSettings } from '../../api/settings';
 import { cn } from '../../lib/utils';
 import {
   Settings, Bell, AlertTriangle, Save, Loader2, CheckCircle2, Trash2,
-  Monitor, Shield,
+  Monitor, Shield, Timer,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -16,7 +16,7 @@ export default function SettingsPage() {
     fetchSettings().then(setConfig).catch(console.error);
   }, []);
 
-  const handleChange = (key: keyof ClauditConfig, value: string | boolean) => {
+  const handleChange = (key: keyof ClauditConfig, value: string | boolean | number) => {
     setConfig(prev => prev ? { ...prev, [key]: value } : null);
   };
 
@@ -130,6 +130,33 @@ export default function SettingsPage() {
                 </button>
               </label>
             ))}
+          </div>
+        </div>
+
+        {/* Automation */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Timer className="w-4 h-4 text-primary" />
+            <h2 className="text-base font-semibold text-foreground">Automation</h2>
+          </div>
+          <div className="space-y-5">
+            <div>
+              <label className={labelCls}>Patrol Interval</label>
+              <p className="text-xs text-muted-foreground mb-2">How often the patrol checks for pending tasks and notifies Mayor. Requires restart.</p>
+              <select
+                value={config.patrolIntervalMs ?? 300000}
+                onChange={e => handleChange('patrolIntervalMs', Number(e.target.value))}
+                className={inputCls}
+              >
+                <option value={60000}>1 minute</option>
+                <option value={120000}>2 minutes</option>
+                <option value={300000}>5 minutes (default)</option>
+                <option value={600000}>10 minutes</option>
+                <option value={900000}>15 minutes</option>
+                <option value={1800000}>30 minutes</option>
+                <option value={3600000}>1 hour</option>
+              </select>
+            </div>
           </div>
         </div>
 

@@ -31,6 +31,14 @@ export interface TaskDraft {
   selectedSessionId: string;
 }
 
+export interface CronDraft {
+  name: string;
+  cronExpression: string;
+  prompt: string;
+  projectPath: string;
+  enabled: boolean;
+}
+
 interface UIState {
   view: View;
   selected: SelectedSession | null;
@@ -44,6 +52,7 @@ interface UIState {
   editingCronTaskId: string | null;
   sessionDraft: SessionDraft | null;
   taskDraft: TaskDraft | null;
+  cronDraft: CronDraft | null;
 
   setView: (view: View) => void;
   selectSession: (projectHash: string, sessionId: string, projectPath: string, isNew?: boolean, slug?: string, slugSessionIds?: string[]) => void;
@@ -58,6 +67,7 @@ interface UIState {
   setEditingCronTaskId: (id: string | null) => void;
   setSessionDraft: (draft: SessionDraft | null) => void;
   setTaskDraft: (draft: TaskDraft | null) => void;
+  setCronDraft: (draft: CronDraft | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -75,6 +85,7 @@ export const useUIStore = create<UIState>()(
       editingCronTaskId: null,
       sessionDraft: null,
       taskDraft: null,
+      cronDraft: null,
 
       setView: (view) => set({ view }),
       selectSession: (projectHash, sessionId, projectPath, isNew, slug, slugSessionIds) =>
@@ -90,6 +101,7 @@ export const useUIStore = create<UIState>()(
       setEditingCronTaskId: (id) => set({ editingCronTaskId: id }),
       setSessionDraft: (draft) => set({ sessionDraft: draft }),
       setTaskDraft: (draft) => set({ taskDraft: draft }),
+      setCronDraft: (draft) => set({ cronDraft: draft }),
     }),
     {
       name: 'claudit:ui-state',
@@ -104,6 +116,7 @@ export const useUIStore = create<UIState>()(
         editingCronTaskId: state.editingCronTaskId,
         sessionDraft: state.sessionDraft,
         taskDraft: state.taskDraft,
+        cronDraft: state.cronDraft,
       }),
     },
   ),

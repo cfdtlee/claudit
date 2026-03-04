@@ -14,6 +14,7 @@ import {
   Clock, Workflow, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import CronTaskForm from './CronTaskForm';
+import CronTaskEmptyState from './CronTaskEmptyState';
 import { describeCron } from './CronExpressionBuilder';
 import { useUIStore } from '../../stores/useUIStore';
 import { StatusBadge } from '../StatusDot';
@@ -22,9 +23,10 @@ import Collapsible from '../Collapsible';
 interface Props {
   taskId: string | null;
   onTaskDeleted: () => void;
+  onTaskCreated?: (id: string) => void;
 }
 
-export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
+export default function CronTaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Props) {
   const [task, setTask] = useState<CronTask | null>(null);
   const [executions, setExecutions] = useState<CronExecution[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -77,15 +79,7 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
   }, [loadTask]);
 
   if (!taskId) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <Workflow className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
-          <p className="text-lg text-muted-foreground">Select a workflow to view</p>
-          <p className="text-sm text-muted-foreground/60 mt-1">Or create a new one from the left panel</p>
-        </div>
-      </div>
-    );
+    return <CronTaskEmptyState onTaskCreated={(id) => onTaskCreated?.(id)} />;
   }
 
   if (!task) {

@@ -30,7 +30,7 @@ function createAgentClaudeSession(agentSystemPrompt: string): Promise<string> {
     );
 
     const mcpConfigPath = getMcpConfigPath();
-    const args = ['-p', '--output-format', 'json'];
+    const args = ['-p', '--output-format', 'json', '--dangerously-skip-permissions'];
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);
     }
@@ -49,8 +49,8 @@ function createAgentClaudeSession(agentSystemPrompt: string): Promise<string> {
 
     const timer = setTimeout(() => {
       proc.kill('SIGKILL');
-      reject(new Error('createAgentClaudeSession timed out after 30s'));
-    }, 30000);
+      reject(new Error('createAgentClaudeSession timed out after 120s'));
+    }, 120000);
 
     proc.on('close', (code) => {
       clearTimeout(timer);
@@ -82,6 +82,17 @@ export async function spawnAgentSession(taskId: string, agentId: string): Promis
   const task = getTask(taskId);
   if (!task) throw new Error(`Task not found: ${taskId}`);
 
+  // Guard: only allow spawning for pending tasks
+  if (task.status !== 'pending') {
+    throw new Error(`Task ${taskId} has status '${task.status}' — only 'pending' tasks can be spawned`);
+  }
+
+  // Guard: reject if task already has an active session
+  const existing = [...activeSessions.values()].find(s => s.taskId === taskId);
+  if (existing) {
+    throw new Error(`Task ${taskId} already has active session: ${existing.sessionId}`);
+  }
+
   const agent = getAgent(agentId);
   if (!agent) throw new Error(`Agent not found: ${agentId}`);
 
@@ -97,8 +108,8 @@ export async function spawnAgentSession(taskId: string, agentId: string): Promis
     startedAt: new Date().toISOString(),
   });
 
-  // Update task to running
-  updateTask(taskId, { status: 'running', assignee: agentId, startedAt: new Date().toISOString() });
+  // Update task to running and bind session
+  updateTask(taskId, { status: 'running', assignee: agentId, sessionId: claudeSessionId, startedAt: new Date().toISOString() });
 
   // Build the ClaudeProcess for the session
   const mcpConfigPath = getMcpConfigPath();

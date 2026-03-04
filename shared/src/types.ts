@@ -220,6 +220,7 @@ export interface ClauditConfig {
   maxConcurrentWorkers?: number;
   sessionTimeoutMs?: number;
   witnessIntervalMs?: number;
+  patrolIntervalMs?: number;
 }
 
 // --- Dashboard Types ---
