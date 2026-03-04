@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { getSettingsObject, getSetting } from './settingsStorage.js';
 import { getAllTasks, updateTask } from './taskStorage.js';
+import { createMessage } from './messageStorage.js';
 
 export const witnessEmitter = new EventEmitter();
 
@@ -21,13 +22,9 @@ function runCheck() {
     lastCheckTime = new Date().toISOString();
     const config = getSettingsObject();
 
-    // 1. Check Mayor session
-    //    - If mayorAutoExecute is on, always try to ensure mayor is running
-    //    - If there's a saved mayorSessionId, check liveness
+    // 1. Always emit mayorCheck — let the handler decide whether to act
     const mayorSessionId = getSetting('mayorSessionId');
-    if (mayorSessionId || config.mayorAutoExecute) {
-      witnessEmitter.emit('mayorCheck', mayorSessionId ?? '');
-    }
+    witnessEmitter.emit('mayorCheck', mayorSessionId ?? '');
 
     // 2. Check all running tasks for stuck sessions
     const allTasks = getAllTasks();
@@ -37,6 +34,14 @@ function runCheck() {
       if (task.status === 'running' && task.startedAt) {
         const elapsed = Date.now() - new Date(task.startedAt).getTime();
         if (elapsed > timeoutMs) {
+          // Create a witness message for Mayor to read
+          createMessage({
+            type: 'witness',
+            source: 'witness',
+            subject: `Session stuck: ${task.title}`,
+            body: `Task "${task.title}" (${task.id}) has been running for ${Math.round(elapsed / 60000)} minutes (timeout: ${Math.round(timeoutMs / 60000)}m). Consider killing the session or extending the timeout.`,
+          });
+
           witnessEmitter.emit('sessionStuck', {
             taskId: task.id,
             elapsed,
@@ -58,6 +63,15 @@ function runCheck() {
       if (allDone) {
         try {
           updateTask(task.id, { blocked_by: [] });
+
+          // Create an event message for Mayor to read
+          createMessage({
+            type: 'event',
+            source: 'witness',
+            subject: `Task unblocked: ${task.title}`,
+            body: `Task "${task.title}" (${task.id}) is now unblocked — all dependencies are done. It can be scheduled for execution.`,
+          });
+
           witnessEmitter.emit('taskUnblocked', task.id);
         } catch (err) {
           console.error(`[witness] Failed to unblock task ${task.id}:`, err);

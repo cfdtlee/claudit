@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { cn } from '../../lib/utils';
+import { Edit3, Pin, PinOff, Plus, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 
 interface Props {
   isArchived?: boolean;
@@ -24,33 +26,33 @@ export default function SessionContextMenu({ isArchived, isPinned, onRename, onP
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
-  const itemClass = 'w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 transition-colors';
+  const itemClass = 'w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2';
 
   return (
     <div
       ref={ref}
-      className="absolute right-2 top-8 z-50 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
+      className="absolute right-2 top-8 z-50 bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[140px] animate-fade-in"
     >
       {!isArchived && (
-        <button onClick={onRename} className={`${itemClass} text-gray-300`}>
-          Rename
+        <button onClick={onRename} className={cn(itemClass, 'text-popover-foreground')}>
+          <Edit3 className="w-3 h-3" /> Rename
         </button>
       )}
       {!isArchived && (
-        <button onClick={onPin} className={`${itemClass} text-gray-300`}>
-          {isPinned ? 'Unpin' : 'Pin to top'}
+        <button onClick={onPin} className={cn(itemClass, 'text-popover-foreground')}>
+          {isPinned ? <><PinOff className="w-3 h-3" /> Unpin</> : <><Pin className="w-3 h-3" /> Pin to top</>}
         </button>
       )}
       {!isArchived && (
-        <button onClick={onAddTask} className={`${itemClass} text-gray-300`}>
-          Add Task
+        <button onClick={onAddTask} className={cn(itemClass, 'text-popover-foreground')}>
+          <Plus className="w-3 h-3" /> Add Task
         </button>
       )}
-      <button onClick={onArchive} className={`${itemClass} text-gray-300`}>
-        {isArchived ? 'Unarchive' : 'Archive'}
+      <button onClick={onArchive} className={cn(itemClass, 'text-popover-foreground')}>
+        {isArchived ? <><ArchiveRestore className="w-3 h-3" /> Unarchive</> : <><Archive className="w-3 h-3" /> Archive</>}
       </button>
-      <button onClick={onDelete} className={`${itemClass} text-red-400 hover:bg-red-900/30`}>
-        Delete
+      <button onClick={onDelete} className={cn(itemClass, 'text-destructive')}>
+        <Trash2 className="w-3 h-3" /> Delete
       </button>
     </div>
   );

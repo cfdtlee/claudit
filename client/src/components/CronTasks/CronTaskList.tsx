@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CronTask } from '../../types';
 import { fetchCronTasks, createCronTask } from '../../api/cron';
+import { cn } from '../../lib/utils';
+import { Plus, Loader2, Workflow } from 'lucide-react';
 import CronTaskItem from './CronTaskItem';
 import CronTaskForm from './CronTaskForm';
 
@@ -50,18 +52,23 @@ export default function CronTaskList({ selectedTaskId, onSelect }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-200">Cron Tasks</h2>
+      <div className="p-4 border-b border-border/50 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-foreground">Cron Tasks</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors"
+          className={cn(
+            'text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1',
+            showForm
+              ? 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20'
+          )}
         >
-          {showForm ? 'Cancel' : '+ New'}
+          {showForm ? 'Cancel' : <><Plus className="w-3 h-3" /> New</>}
         </button>
       </div>
 
       {showForm && (
-        <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+        <div className="p-4 border-b border-border/50 bg-card/50 animate-slide-in">
           <CronTaskForm
             onSubmit={handleCreate}
             onCancel={() => setShowForm(false)}
@@ -69,12 +76,16 @@ export default function CronTaskList({ selectedTaskId, onSelect }: Props) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 sidebar-scroll">
         {loading ? (
-          <div className="p-4 text-gray-500 text-sm">Loading...</div>
+          <div className="p-6 flex justify-center">
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+          </div>
         ) : tasks.length === 0 ? (
-          <div className="p-4 text-gray-500 text-sm text-center">
-            No cron tasks yet. Create one to get started.
+          <div className="p-6 text-center">
+            <Workflow className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">No cron tasks yet</p>
+            <p className="text-muted-foreground/60 text-xs mt-1">Create one to get started</p>
           </div>
         ) : (
           tasks.map(task => (

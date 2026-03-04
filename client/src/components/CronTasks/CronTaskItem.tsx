@@ -1,5 +1,6 @@
 import { CronTask } from '../../types';
-import { StatusBadge } from '../StatusDot';
+import { cn } from '../../lib/utils';
+import { Clock } from 'lucide-react';
 
 interface Props {
   task: CronTask;
@@ -22,16 +23,28 @@ export default function CronTaskItem({ task, selected, onSelect }: Props) {
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-left px-4 py-3 border-b border-gray-800 transition-colors ${
-        selected ? 'bg-claude/10' : 'hover:bg-gray-800/50'
-      }`}
+      className={cn(
+        'w-full text-left px-4 py-3 transition-all',
+        selected
+          ? 'list-item-selected'
+          : 'list-item-hover'
+      )}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-medium text-gray-200 truncate">{task.name}</span>
-        <StatusBadge status={task.enabled ? 'enabled' : 'disabled'} />
+        <span className="text-sm font-medium text-foreground truncate">{task.name}</span>
+        <span className={cn(
+          'text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md',
+          task.enabled
+            ? 'bg-emerald-500/10 text-emerald-400'
+            : 'bg-secondary text-muted-foreground'
+        )}>
+          {task.enabled ? 'Active' : 'Paused'}
+        </span>
       </div>
-      <div className="text-xs text-gray-500 font-mono">{task.cronExpression}</div>
-      <div className="text-xs text-gray-600 mt-1">Last run: {timeAgo(task.lastRun)}</div>
+      <div className="text-xs text-muted-foreground font-mono">{task.cronExpression}</div>
+      <div className="text-xs text-muted-foreground/60 mt-1 flex items-center gap-1">
+        <Clock className="w-2.5 h-2.5" /> {timeAgo(task.lastRun)}
+      </div>
     </button>
   );
 }

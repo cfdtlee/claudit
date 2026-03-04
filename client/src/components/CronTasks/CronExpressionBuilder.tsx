@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { cn } from '../../lib/utils';
 
 type Preset = 'every_n_min' | 'hourly' | 'daily' | 'weekly' | 'custom';
 
@@ -102,6 +103,8 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
     { key: 'custom', label: 'Custom' },
   ];
 
+  const selectCls = 'bg-background/80 border border-border rounded-lg px-2 py-1 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-all';
+
   return (
     <div className="space-y-2">
       {/* Preset buttons */}
@@ -111,11 +114,12 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             key={p.key}
             type="button"
             onClick={() => setPreset(p.key)}
-            className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+            className={cn(
+              'text-xs px-2.5 py-1 rounded-full transition-all font-medium',
               preset === p.key
-                ? 'bg-claude text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
+                ? 'bg-primary/15 text-primary'
+                : 'bg-secondary/30 text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+            )}
           >
             {p.label}
           </button>
@@ -126,39 +130,39 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
       <div className="flex items-center gap-2 flex-wrap">
         {preset === 'every_n_min' && (
           <>
-            <span className="text-xs text-gray-400">Every</span>
+            <span className="text-xs text-muted-foreground">Every</span>
             <select
               value={minutes}
               onChange={e => setMinutes(parseInt(e.target.value))}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
+              className={selectCls}
             >
               {[1, 2, 5, 10, 15, 20, 30, 45, 60].map(n => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
-            <span className="text-xs text-gray-400">minutes</span>
+            <span className="text-xs text-muted-foreground">minutes</span>
           </>
         )}
 
         {preset === 'hourly' && (
           <>
-            <span className="text-xs text-gray-400">At minute</span>
+            <span className="text-xs text-muted-foreground">At minute</span>
             <select
               value={minute}
               onChange={e => setMinute(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
+              className={selectCls}
             >
               {[0, 5, 10, 15, 20, 30, 45].map(n => (
                 <option key={n} value={n}>{`:${String(n).padStart(2, '0')}`}</option>
               ))}
             </select>
-            <span className="text-xs text-gray-400">of every hour</span>
+            <span className="text-xs text-muted-foreground">of every hour</span>
           </>
         )}
 
         {(preset === 'daily' || preset === 'weekly') && (
           <>
-            <span className="text-xs text-gray-400">At</span>
+            <span className="text-xs text-muted-foreground">At</span>
             <input
               type="time"
               value={`${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`}
@@ -167,18 +171,18 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
                 setHour(String(parseInt(h)));
                 setMinute(String(parseInt(m)));
               }}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
+              className={selectCls}
             />
           </>
         )}
 
         {preset === 'weekly' && (
           <>
-            <span className="text-xs text-gray-400">on</span>
+            <span className="text-xs text-muted-foreground">on</span>
             <select
               value={weekday}
               onChange={e => setWeekday(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-claude"
+              className={selectCls}
             >
               <option value="1-5">Weekdays (Mon-Fri)</option>
               <option value="0,6">Weekends</option>
@@ -199,17 +203,17 @@ export default function CronExpressionBuilder({ value, onChange }: Props) {
             type="text"
             value={customExpr}
             onChange={e => setCustomExpr(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-claude"
+            className="flex-1 bg-background/80 border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
             placeholder="*/30 * * * *"
           />
         )}
       </div>
 
       {/* Human-readable description */}
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-muted-foreground">
         {describeCron(value)}
         {preset !== 'custom' && (
-          <span className="ml-2 text-gray-600 font-mono">{value}</span>
+          <span className="ml-2 text-muted-foreground/50 font-mono">{value}</span>
         )}
       </div>
     </div>

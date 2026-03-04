@@ -3,26 +3,90 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { ClaudeProcess, CLAUDE_BIN } from './claudeProcess.js';
 import { getSetting, setSetting } from './settingsStorage.js';
 import { PROJECTS_DIR, readHistoryEntries } from './sessionScanner.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const mayorEmitter = new EventEmitter();
 
 let mayorProcess: ClaudeProcess | null = null;
 let mayorSessionId: string | null = null;
+let isCreatingMayor = false;
+let createMayorPromise: Promise<string> | null = null;
 
-const MAYOR_SYSTEM_PROMPT = `You are Mayor, the orchestrator of claudit.
-Your job is to manage tasks, not execute them.
+const DATA_DIR = path.join(os.homedir(), '.claudit');
+const MCP_CONFIG_PATH = path.join(DATA_DIR, 'mayor-mcp.json');
 
-Responsibilities:
-1. When asked to decompose a task, break it into subtasks (max 2 levels deep)
-2. Assign tasks to agents based on their specialty
-3. Never write code or execute tools directly
-4. When creating subtasks, output them as JSON for claudit to create
+const MAYOR_SYSTEM_PROMPT = `You are Mayor, the orchestrator of claudit — an AI task management system.
 
-Output subtask plans as:
-SUBTASK_PLAN: [{"title": "...", "prompt": "...", "assignee": "agentId"}]`;
+You have access to tools provided by the "claudit" MCP server. Use them to manage tasks, agents, and sessions.
+
+## Your Responsibilities
+1. When asked to handle a task, use get_tasks and get_agents to understand current state
+2. Break complex tasks into subtasks using create_task (max 2 levels deep)
+3. Assign tasks to agents using assign_task based on their specialty
+4. Spawn agent sessions using spawn_session when ready to execute
+5. Monitor progress via get_messages (check for completion/failure events)
+6. Use notify_human to alert the user about important events
+7. Use sleep to wait for agents to complete before checking again
+8. Use handoff to save context summary before session ends
+
+## Rules
+- NEVER write code yourself — delegate to agents
+- ALWAYS use tools — never output raw JSON or text commands
+- Check get_messages regularly for agent completion/failure events
+- When all subtasks are done, mark the parent task as done
+- If a task fails, consider retrying or escalating via notify_human`;
+
+/**
+ * Get the absolute path to the MCP server entry point.
+ * Works both in dev (ts source) and prod (compiled js).
+ */
+function getMcpServerEntryPath(): string {
+  // In production, use the bin entry point
+  const binPath = path.resolve(process.cwd(), 'bin', 'claudit-mcp.js');
+  if (fs.existsSync(binPath)) return binPath;
+
+  // Fallback: try from package root
+  const rootBin = path.resolve(__dirname, '..', '..', '..', 'bin', 'claudit-mcp.js');
+  if (fs.existsSync(rootBin)) return rootBin;
+
+  return binPath; // default
+}
+
+/**
+ * Write MCP config file for Mayor/agent sessions to use.
+ */
+function writeMcpConfig(): string {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  const config = {
+    mcpServers: {
+      claudit: {
+        command: 'node',
+        args: [getMcpServerEntryPath()],
+      },
+    },
+  };
+
+  fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2));
+  console.log(`[mayor] Wrote MCP config to ${MCP_CONFIG_PATH}`);
+  return MCP_CONFIG_PATH;
+}
+
+/**
+ * Get the path to the MCP config file, creating it if needed.
+ */
+export function getMcpConfigPath(): string {
+  writeMcpConfig();
+  return MCP_CONFIG_PATH;
+}
 
 export function getMayorSessionId(): string | null {
   return mayorSessionId;
@@ -47,8 +111,6 @@ export function getMayorProjectPath(): string {
 
 /**
  * Create a real Claude session via `claude -p` and return the session_id.
- * Pipes prompt via stdin (claude -p reads from stdin, not positional args).
- * Fully async — does not block the event loop.
  */
 function createNewMayorSession(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -56,7 +118,8 @@ function createNewMayorSession(): Promise<string> {
       Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
     );
 
-    const proc = spawn(CLAUDE_BIN, ['-p', '--output-format', 'json'], {
+    const mcpConfigPath = getMcpConfigPath();
+    const proc = spawn(CLAUDE_BIN, ['-p', '--output-format', 'json', '--mcp-config', mcpConfigPath], {
       cwd: os.homedir(),
       env: cleanEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -75,7 +138,6 @@ function createNewMayorSession(): Promise<string> {
 
     proc.on('close', (code) => {
       clearTimeout(timer);
-      // claude -p outputs JSON on both stdout and stderr; check both
       const output = stdout || stderr;
       const lines = output.trim().split('\n');
       for (const line of lines) {
@@ -95,40 +157,57 @@ function createNewMayorSession(): Promise<string> {
       reject(err);
     });
 
-    // Write prompt to stdin and close it
     proc.stdin.write('You are Mayor. Reply with: MAYOR_READY');
     proc.stdin.end();
   });
 }
 
 export async function ensureMayorRunning(): Promise<string> {
-  // Check if we already have a running mayor
+  // Already alive — fast path
   if (mayorProcess && mayorProcess.isAlive() && mayorSessionId) {
     return mayorSessionId;
   }
 
-  // Check settings for existing session
+  // Another caller is already creating — coalesce onto the same promise
+  if (isCreatingMayor && createMayorPromise) {
+    return createMayorPromise;
+  }
+
+  isCreatingMayor = true;
+  createMayorPromise = _doEnsureMayorRunning();
+
+  try {
+    return await createMayorPromise;
+  } finally {
+    isCreatingMayor = false;
+    createMayorPromise = null;
+  }
+}
+
+async function _doEnsureMayorRunning(): Promise<string> {
+  // Try resuming saved session
   const savedId = getSetting('mayorSessionId');
   if (savedId) {
     mayorSessionId = savedId;
     try {
-      mayorProcess = new ClaudeProcess(savedId, os.homedir());
+      const mcpConfigPath = getMcpConfigPath();
+      mayorProcess = new ClaudeProcess(savedId, os.homedir(), ['--mcp-config', mcpConfigPath]);
       setupMayorListeners(mayorProcess);
       mayorProcess.start();
       console.log(`[mayor] Resumed existing session: ${savedId}`);
       return savedId;
     } catch (err) {
       console.error('[mayor] Failed to resume existing session:', err);
-      // Fall through to create new
     }
   }
 
-  // Create new mayor session with a real Claude session ID
+  // Create brand-new session
   const newSessionId = await createNewMayorSession();
   mayorSessionId = newSessionId;
   setSetting('mayorSessionId', newSessionId);
 
-  mayorProcess = new ClaudeProcess(newSessionId, os.homedir());
+  const mcpConfigPath = getMcpConfigPath();
+  mayorProcess = new ClaudeProcess(newSessionId, os.homedir(), ['--mcp-config', mcpConfigPath]);
   setupMayorListeners(mayorProcess);
   mayorProcess.start();
 
@@ -143,6 +222,20 @@ function setupMayorListeners(proc: ClaudeProcess) {
 
   proc.on('done', () => {
     mayorEmitter.emit('done');
+
+    // Check for handoff summary — if present, re-invoke Mayor after a short delay
+    const handoff = getSetting('mayorHandoffSummary');
+    if (handoff) {
+      setSetting('mayorHandoffSummary', '');
+      console.log('[mayor] Handoff detected, re-invoking Mayor in 2s...');
+      setTimeout(async () => {
+        try {
+          await sendToMayor(`Resuming from handoff. Previous context: ${handoff}\n\nCheck get_messages() and get_tasks() for current state.`);
+        } catch (err) {
+          console.error('[mayor] Failed to re-invoke after handoff:', err);
+        }
+      }, 2000);
+    }
   });
 
   proc.on('error', (message: string) => {

@@ -1,7 +1,7 @@
-import { ReactNode, useState, useCallback, useEffect, useRef } from 'react';
+import { ReactNode, useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 
 const SIDEBAR_STORAGE_KEY = 'claudit:sidebar-width';
-const SIDEBAR_MIN = 200;
+const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 500;
 const SIDEBAR_DEFAULT = 300;
 
@@ -31,7 +31,6 @@ interface Props {
 export default function Layout({ nav, sidebar, main }: Props) {
   const hasSidebar = sidebar != null;
 
-  // Sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     loadWidth(SIDEBAR_STORAGE_KEY, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT)
   );
@@ -39,7 +38,6 @@ export default function Layout({ nav, sidebar, main }: Props) {
   const sidebarWidthRef = useRef(sidebarWidth);
   sidebarWidthRef.current = sidebarWidth;
 
-  // Nav resize state
   const [navWidth, setNavWidth] = useState(() =>
     loadWidth(NAV_STORAGE_KEY, NAV_MIN, NAV_MAX, NAV_DEFAULT)
   );
@@ -69,7 +67,7 @@ export default function Layout({ nav, sidebar, main }: Props) {
         navWidthRef.current = newWidth;
       }
       if (sidebarDragging.current) {
-        const offset = navWidthRef.current + 4; // nav + nav-divider
+        const offset = navWidthRef.current;
         const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX - offset));
         setSidebarWidth(newWidth);
         sidebarWidthRef.current = newWidth;
@@ -98,45 +96,66 @@ export default function Layout({ nav, sidebar, main }: Props) {
     };
   }, []);
 
-  const gridTemplate = hasSidebar
-    ? `${navWidth}px 4px ${sidebarWidth}px 4px 1fr`
-    : `${navWidth}px 4px 1fr`;
-
   return (
-    <div
-      className="h-screen grid"
-      style={{ gridTemplateColumns: gridTemplate }}
-    >
-      <nav className="border-r border-gray-800 bg-gray-950 flex flex-col py-4 px-2 overflow-hidden">
+    <div className="h-screen flex bg-background relative overflow-hidden">
+      {/* Background gradient orbs */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div className="absolute w-[600px] h-[600px] -top-48 -right-24 rounded-full bg-[#DA7756]/30 blur-[150px] animate-orb-1" />
+        <div className="absolute w-[500px] h-[500px] -bottom-32 -left-40 rounded-full bg-[#f5a623]/25 blur-[130px] animate-orb-2" />
+        <div className="absolute w-[350px] h-[350px] top-1/2 left-1/3 -translate-y-1/2 rounded-full bg-[#8b4563]/20 blur-[120px] animate-orb-3" />
+      </div>
+
+      {/* Nav — deepest layer */}
+      <nav
+        className="relative flex flex-col py-3 px-2 overflow-hidden flex-shrink-0"
+        style={{ width: navWidth }}
+      >
         {typeof nav === 'object' && nav !== null && 'type' in (nav as any)
           ? <NavWrapper collapsed={collapsed}>{nav}</NavWrapper>
           : nav}
       </nav>
-      {/* Nav resize divider */}
+
+      {/* Nav resize handle */}
       <div
         onMouseDown={onNavMouseDown}
-        className="cursor-col-resize bg-transparent hover:bg-blue-500/40 transition-colors"
+        className="relative cursor-col-resize w-[3px] flex-shrink-0"
       />
-      {hasSidebar && (
-        <>
-          <aside className="border-r border-gray-800 overflow-y-auto bg-gray-900">
-            {sidebar}
-          </aside>
-          <div
-            onMouseDown={onSidebarMouseDown}
-            className="cursor-col-resize bg-transparent hover:bg-blue-500/40 transition-colors"
-          />
-        </>
-      )}
-      <main className="overflow-hidden flex flex-col">
-        {main}
-      </main>
+
+      {/* Content area */}
+      <div className="relative flex-1 py-2 pr-2 min-w-0">
+        {hasSidebar ? (
+          /* Outer panel — glass wraps sidebar list + detail */
+          <div className="glass-panel rounded-xl h-full overflow-hidden flex relative">
+            {/* Sidebar list */}
+            <aside
+              className="flex-shrink-0 overflow-hidden"
+              style={{ width: sidebarWidth }}
+            >
+              {sidebar}
+            </aside>
+
+            {/* Sidebar resize handle — absolute so no layout gap */}
+            <div
+              onMouseDown={onSidebarMouseDown}
+              className="absolute top-0 bottom-0 w-[6px] cursor-col-resize z-30"
+              style={{ left: sidebarWidth - 3 }}
+            />
+
+            {/* Detail panel — elevated glass overlay */}
+            <main className="overflow-hidden flex flex-col glass-panel-elevated rounded-xl flex-1 min-w-0 my-2.5 mr-2.5">
+              {main}
+            </main>
+          </div>
+        ) : (
+          /* No sidebar — single glass panel */
+          <main className="overflow-hidden flex flex-col glass-panel rounded-xl h-full">
+            {main}
+          </main>
+        )}
+      </div>
     </div>
   );
 }
-
-// Provides collapsed context to NavSidebar without coupling Layout to its internals
-import { createContext, useContext } from 'react';
 
 export const NavCollapsedContext = createContext(false);
 export function useNavCollapsed() { return useContext(NavCollapsedContext); }

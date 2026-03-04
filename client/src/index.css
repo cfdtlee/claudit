@@ -2,27 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
+@layer base {
+  :root {
+    --background: 20 3% 4%;
+    --foreground: 20 2% 95%;
+    --card: 20 3% 7%;
+    --card-foreground: 20 2% 95%;
+    --panel: 20 3% 9%;
+    --panel-elevated: 20 3% 13%;
+    --popover: 20 3% 7%;
+    --popover-foreground: 20 2% 95%;
+    --primary: 18 62% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 20 3% 12%;
+    --secondary-foreground: 20 2% 85%;
+    --muted: 20 3% 12%;
+    --muted-foreground: 20 2% 55%;
+    --accent: 20 3% 14%;
+    --accent-foreground: 20 2% 95%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 20 3% 14%;
+    --input: 20 3% 14%;
+    --ring: 18 62% 60%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Auto-hiding scrollbar — only visible while scrolling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: hsl(0 0% 22%) transparent;
+}
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
+  background: transparent;
+  border-radius: 2px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 22%);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+  background: hsl(0 0% 30%);
 }
 
 /* Markdown code blocks */
 .prose pre {
-  background: #1e1e2e !important;
+  background: hsl(20 3% 5% / 0.9) !important;
   border-radius: 8px;
   padding: 1rem;
   overflow-x: auto;
+  border: 1px solid hsl(20 3% 14% / 0.5);
 }
 
 .prose code {
@@ -30,7 +78,7 @@
 }
 
 .prose p code {
-  background: #374151;
+  background: hsl(20 3% 14% / 0.6);
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
   font-size: 0.875rem;
@@ -51,7 +99,6 @@
   position: relative;
 }
 
-/* Sharp rotating border */
 .glow-border::before {
   content: '';
   position: absolute;
@@ -62,7 +109,6 @@
   z-index: 0;
 }
 
-/* Soft outer glow */
 .glow-border::after {
   content: '';
   position: absolute;
@@ -74,7 +120,69 @@
   z-index: 0;
 }
 
-/* Inner card hides normal border when glow is active */
 .glow-border > .glow-border-inner {
   border-color: transparent;
+  background: hsl(var(--card)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Sidebar scroll — hide scrollbar so items extend to full width (bridge effect) */
+.sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Glass panels ─── */
+.glass-panel {
+  background: hsl(var(--panel) / 0.4);
+  backdrop-filter: blur(48px) saturate(1.2);
+  -webkit-backdrop-filter: blur(48px) saturate(1.2);
+  border: 1px solid hsl(var(--border) / 0.2);
+}
+
+.glass-panel-elevated {
+  background: hsl(var(--panel-elevated) / 0.45);
+  backdrop-filter: blur(48px) saturate(1.2);
+  -webkit-backdrop-filter: blur(48px) saturate(1.2);
+  border: 1px solid hsl(var(--border) / 0.12);
+}
+
+/* Subtle gradient cards */
+.gradient-card {
+  background: linear-gradient(135deg, hsl(20 3% 8%) 0%, hsl(20 3% 6%) 100%);
+}
+
+/* Status glow effects */
+.status-glow-blue {
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+}
+.status-glow-green {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.15);
+}
+.status-glow-red {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
+}
+.status-glow-amber {
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
+}
+
+/* ─── List item states — rounded pill highlight ─── */
+.list-item-selected,
+.list-item-hover {
+  border-radius: 0.5rem !important;
+  margin: 2px 8px !important;
+  width: calc(100% - 16px) !important;
+}
+
+.list-item-selected {
+  background: hsl(var(--accent) / 0.5);
+}
+
+.list-item-hover:hover {
+  background: hsl(var(--accent) / 0.3);
 }

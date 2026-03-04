@@ -1,6 +1,8 @@
 import { useEffect, useCallback } from 'react';
+import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import NavSidebar from './components/NavSidebar';
+import { useSystemNotifications } from './hooks/useSystemNotifications';
 import SessionList from './components/SessionList/SessionList';
 import SessionDetail from './components/SessionDetail/SessionDetail';
 import EmptyState from './components/SessionDetail/EmptyState';
@@ -153,11 +155,29 @@ export default function App() {
     }
   };
 
+  useSystemNotifications();
+
   return (
-    <Layout
-      nav={<NavSidebar />}
-      sidebar={renderSidebar()}
-      main={renderMain()}
-    />
+    <>
+      <Layout
+        nav={<NavSidebar />}
+        sidebar={renderSidebar()}
+        main={renderMain()}
+      />
+      <Toaster
+        position="bottom-right"
+        richColors
+        closeButton
+        duration={10000}
+        toastOptions={{
+          style: {
+            background: 'hsl(20 3% 9% / 0.95)',
+            border: '1px solid hsl(20 3% 14% / 0.4)',
+            color: 'hsl(20 2% 95%)',
+            backdropFilter: 'blur(12px)',
+          },
+        }}
+      />
+    </>
   );
 }

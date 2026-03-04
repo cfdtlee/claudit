@@ -19,6 +19,7 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
   const wsRef = useRef<WebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'exited' | 'error'>('connecting');
+  const [termReady, setTermReady] = useState(false);
 
   const pendingTaskPrompt = useUIStore(s => s.pendingTaskPrompt);
   const setPendingTaskPrompt = useUIStore(s => s.setPendingTaskPrompt);
@@ -32,11 +33,11 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
       fontSize: 13,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
-        background: '#0d1117',
-        foreground: '#c9d1d9',
-        cursor: '#58a6ff',
-        cursorAccent: '#0d1117',
-        selectionBackground: '#264f78',
+        background: '#161514',
+        foreground: '#e5e5e5',
+        cursor: '#d97756',
+        cursorAccent: '#0a0a0a',
+        selectionBackground: '#d97756/30',
         black: '#484f58',
         red: '#ff7b72',
         green: '#3fb950',
@@ -95,7 +96,7 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
             }
           };
           reader.readAsDataURL(blob);
-          return; // handle first image only
+          return;
         }
       }
     };
@@ -107,7 +108,6 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // Send resume or new message with terminal dimensions
       const dims = fitAddon.proposeDimensions();
       ws.send(JSON.stringify({
         type: isNew ? 'new' : 'resume',
@@ -121,21 +121,19 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
     ws.onmessage = (event) => {
       const data = event.data as string;
 
-      // Check for control message prefix
       if (data.startsWith(CTRL_PREFIX)) {
         const ctrl = JSON.parse(data.slice(1));
         switch (ctrl.type) {
           case 'ready':
             setStatus('connected');
-            // Show warning if another claude process is using this session
             if (ctrl.warning) {
               term.writeln('\x1b[33m⚠ ' + ctrl.warning + '\x1b[0m');
             }
             setTimeout(() => {
               fitAddonRef.current?.fit();
               termRef.current?.scrollToBottom();
+              setTermReady(true);
             }, 50);
-            // Pre-fill pending task prompt (no Enter — user reviews and submits)
             {
               const pending = useUIStore.getState().pendingTaskPrompt;
               if (pending && pending.sessionId === sessionId) {
@@ -156,21 +154,23 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
             setStatus('exited');
             term.writeln('');
             term.writeln('\x1b[90m--- Process exited (code: ' + ctrl.exitCode + ') ---\x1b[0m');
+            setTermReady(true);
             break;
           case 'error':
             setStatus('error');
             term.writeln('\x1b[31mError: ' + ctrl.message + '\x1b[0m');
+            setTermReady(true);
             break;
         }
         return;
       }
 
-      // Raw PTY data
       term.write(data);
     };
 
     ws.onerror = () => {
       setStatus('error');
+      setTermReady(true);
       term.writeln('\x1b[31mWebSocket connection error\x1b[0m');
     };
 
@@ -180,14 +180,12 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
       }
     };
 
-    // Forward user input to PTY
     const inputDisposable = term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'input', data }));
       }
     });
 
-    // Resize handling with debounce
     let resizeTimer: ReturnType<typeof setTimeout>;
     const observer = new ResizeObserver(() => {
       clearTimeout(resizeTimer);
@@ -206,7 +204,6 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
     });
     observer.observe(containerRef.current);
 
-    // Cleanup
     return () => {
       clearTimeout(resizeTimer);
       observer.disconnect();
@@ -218,24 +215,25 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
       termRef.current = null;
       fitAddonRef.current = null;
       setStatus('connecting');
+      setTermReady(false);
     };
   }, [sessionId, projectPath, isNew]);
 
   return (
     <div className="flex flex-col h-full">
       {/* Status bar */}
-      <div className="flex items-center gap-2 px-3 py-1 bg-gray-900 border-b border-gray-800 text-xs shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-card/30 border-b border-border/30 text-xs shrink-0">
         <span className={
-          status === 'connected' ? 'text-green-400' :
-          status === 'connecting' ? 'text-yellow-400' :
-          status === 'error' ? 'text-red-400' :
-          'text-gray-500'
+          status === 'connected' ? 'text-emerald-400' :
+          status === 'connecting' ? 'text-amber-400' :
+          status === 'error' ? 'text-destructive' :
+          'text-muted-foreground'
         }>
-          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
-            status === 'connected' ? 'bg-green-400' :
-            status === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-            status === 'error' ? 'bg-red-400' :
-            'bg-gray-500'
+          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${
+            status === 'connected' ? 'bg-emerald-400' :
+            status === 'connecting' ? 'bg-amber-400 animate-pulse' :
+            status === 'error' ? 'bg-destructive' :
+            'bg-muted-foreground'
           }`} />
           {status === 'connected' ? 'Terminal connected' :
            status === 'connecting' ? 'Connecting...' :
@@ -244,11 +242,11 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
         </span>
       </div>
 
-      {/* Terminal container */}
+      {/* Terminal container — hidden until scrollback replay finishes to prevent visible scroll */}
       <div
         ref={containerRef}
         className="flex-1 min-h-0"
-        style={{ padding: '4px 0 0 4px' }}
+        style={{ padding: '8px 10px 8px 10px', visibility: termReady ? 'visible' : 'hidden' }}
       />
     </div>
   );

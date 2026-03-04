@@ -17,6 +17,7 @@ export class ClaudeProcess extends EventEmitter {
   private proc: ChildProcess | null = null;
   private sessionId: string;
   private projectPath: string;
+  private extraArgs: string[];
   private stdoutBuffer = '';
   private stderrBuffer = '';
   private lastTextLength = 0;
@@ -26,10 +27,11 @@ export class ClaudeProcess extends EventEmitter {
   private userMessageSent = false;
   private pendingMessage: string | null = null;
 
-  constructor(sessionId: string, projectPath: string) {
+  constructor(sessionId: string, projectPath: string, extraArgs?: string[]) {
     super();
     this.sessionId = sessionId;
     this.projectPath = projectPath;
+    this.extraArgs = extraArgs ?? [];
   }
 
   private resetTracking() {
@@ -51,6 +53,7 @@ export class ClaudeProcess extends EventEmitter {
       '--output-format', 'stream-json',
       '--input-format', 'stream-json',
       '--verbose',
+      ...this.extraArgs,
     ], {
       cwd,
       env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE')),

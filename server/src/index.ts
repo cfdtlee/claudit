@@ -24,9 +24,12 @@ try {
 import { eventBus } from './services/eventBus.js';
 import { closeDb } from './services/database.js';
 import { startWitness, stopWitness, witnessEmitter } from './services/witnessService.js';
-import { ensureMayorRunning, sendToMayor, stopMayor } from './services/mayorService.js';
-import { updateTask } from './services/taskStorage.js';
+import { ensureMayorRunning, stopMayor } from './services/mayorService.js';
+import { updateTask, getTask, getAllTasks } from './services/taskStorage.js';
+import { getAgent } from './services/agentStorage.js';
 import { getSetting } from './services/settingsStorage.js';
+import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions } from './services/sessionManager.js';
+import { getAllMessages, markMessageRead, createMessage } from './services/messageStorage.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -200,6 +203,13 @@ server.listen(PORT, () => {
   initScheduler();
   startWitness();
 
+  // Auto-start Mayor on server boot (non-blocking)
+  ensureMayorRunning().then(() => {
+    broadcastEvent({ type: 'notification', level: 'info', title: 'Mayor', message: 'Mayor is online and ready' });
+  }).catch(err => {
+    console.error('[server] Failed to auto-start mayor:', err);
+  });
+
   // Broadcast to all connected /ws/events clients
   function broadcastEvent(event: object) {
     const msg = JSON.stringify(event);
@@ -229,8 +239,17 @@ server.listen(PORT, () => {
       errorMessage: `Session stuck for ${elapsedMin} minutes`,
     });
 
-    // 2. Broadcast to frontend
+    // 2. Notify Mayor via DB mailbox
+    createMessage({
+      type: 'event',
+      source: 'witness',
+      subject: 'task_stuck',
+      body: `Task ${data.taskId} session stuck for ${elapsedMin} minutes. Decide: retry, reassign, or escalate.`,
+    });
+
+    // 3. Broadcast to frontend
     broadcastEvent({ type: 'task_updated', taskId: data.taskId });
+    broadcastEvent({ type: 'notification', level: 'warning', title: 'Session stuck', message: `Task stuck for ${elapsedMin}m — needs attention` });
   });
 
   witnessEmitter.on('taskUnblocked', async (taskId: string) => {
@@ -242,25 +261,103 @@ server.listen(PORT, () => {
     // 2. Broadcast to frontend
     broadcastEvent({ type: 'task_updated', taskId });
 
-    // 3. If mayorAutoExecute is enabled, notify Mayor
+    // 3. If mayorAutoExecute is enabled, notify Mayor via DB mailbox
     if (getSetting('mayorAutoExecute') === 'true') {
-      try {
-        await sendToMayor(`Task unblocked: ${taskId}. Check pending tasks and schedule execution.`);
-      } catch (err) {
-        console.error('[server] Failed to notify mayor about unblocked task:', err);
-      }
+      createMessage({
+        type: 'event',
+        source: 'witness',
+        subject: `Task unblocked: ${taskId}`,
+        body: `Task ${taskId} is now unblocked. Check pending tasks and schedule execution.`,
+      });
     }
   });
-});
 
-// Graceful shutdown for tsx watch restarts
-for (const sig of ['SIGTERM', 'SIGINT'] as const) {
-  process.on(sig, () => {
-    stopWitness();
-    stopMayor();
-    stopAllJobs();
-    closeDb();
-    server.close();
-    process.exit(0);
+  // Forward claudit events to WebSocket clients
+  eventBus.onEvent((event) => {
+    broadcastEvent(event);
   });
-}
+
+  // Poll for Mayor spawn/kill/send requests from MCP tools
+  setInterval(() => {
+    try {
+      const messages = getAllMessages({ type: 'event', unreadOnly: true });
+      for (const msg of messages) {
+        if (msg.source !== 'mayor') continue;
+
+        if (msg.subject === 'spawn_request') {
+          markMessageRead(msg.id);
+          try {
+            const { taskId, agentId } = JSON.parse(msg.body);
+            const task = getTask(taskId);
+            const agent = getAgent(agentId);
+            spawnAgentSession(taskId, agentId).then(({ sessionId }) => {
+              console.log(`[server] Spawned agent session: ${sessionId}`);
+              broadcastEvent({ type: 'notification', level: 'info', title: `${agent?.name ?? 'Agent'} started`, message: `"${task?.title ?? taskId}"` });
+            }).catch((err) => {
+              console.error(`[server] Failed to spawn agent session:`, err);
+              broadcastEvent({ type: 'notification', level: 'error', title: 'Agent spawn failed', message: `${err.message || 'Unknown error'}`, duration: 15000 });
+            });
+          } catch (err) {
+            console.error('[server] Failed to parse spawn request:', err);
+          }
+        } else if (msg.subject === 'kill_request') {
+          markMessageRead(msg.id);
+          try {
+            const { sessionId } = JSON.parse(msg.body);
+            killAgentSession(sessionId);
+          } catch (err) {
+            console.error('[server] Failed to parse kill request:', err);
+          }
+        } else if (msg.subject === 'send_to_agent') {
+          markMessageRead(msg.id);
+          try {
+            const { agentId, message } = JSON.parse(msg.body);
+            sendToAgent(agentId, message);
+          } catch (err) {
+            console.error('[server] Failed to parse send_to_agent request:', err);
+          }
+        }
+      }
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  }, 2000);
+
+  // Mayor Patrol: periodically check for pending tasks and notify Mayor
+  const PATROL_INTERVAL = parseInt(process.env.MAYOR_PATROL_INTERVAL_MS ?? '300000');
+  const patrolTimer = setInterval(() => {
+    try {
+      const pendingTasks = getAllTasks().filter(t => t.status === 'pending');
+      if (pendingTasks.length === 0) return;
+
+      const summary = pendingTasks.map(t =>
+        `- [${t.id.slice(0, 8)}] "${t.title}" assignee=${t.assignee ?? 'unassigned'}`
+      ).join('\n');
+
+      createMessage({
+        type: 'event',
+        source: 'patrol',
+        subject: 'patrol',
+        body: `Patrol check: ${pendingTasks.length} pending task(s) found.\n${summary}\n\nPlease use get_tasks() to review and assign/spawn them as needed.`,
+      });
+
+      console.log(`[patrol] Notified Mayor of ${pendingTasks.length} pending tasks`);
+    } catch (err) {
+      console.error('[patrol] Error:', err);
+    }
+  }, PATROL_INTERVAL);
+
+  // Graceful shutdown for tsx watch restarts
+  for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+    process.on(sig, () => {
+      clearInterval(patrolTimer);
+      stopAllAgentSessions();
+      stopWitness();
+      stopMayor();
+      stopAllJobs();
+      closeDb();
+      server.close();
+      process.exit(0);
+    });
+  }
+});

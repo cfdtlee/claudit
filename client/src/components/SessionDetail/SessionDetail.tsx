@@ -3,6 +3,8 @@ import { SessionDetail as SessionDetailType, Task } from '../../types';
 import { fetchSessionDetail, markSessionSeen } from '../../api/sessions';
 import { fetchTasks } from '../../api/tasks';
 import { useUIStore } from '../../stores/useUIStore';
+import { cn } from '../../lib/utils';
+import { Info, ExternalLink, Terminal, History, Copy, Check, Loader2 } from 'lucide-react';
 import EmptyState from './EmptyState';
 
 const TerminalView = lazy(() => import('./TerminalView'));
@@ -33,13 +35,11 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
 
   const hasMergedHistory = !!(slug && slugSessionIds && slugSessionIds.length > 1);
 
-  // Reset tab when session changes
   useEffect(() => {
     setActiveTab('terminal');
     setShowIdPopover(false);
   }, [sessionId]);
 
-  // Load session header info when selection changes
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -59,13 +59,10 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
         }
       });
 
-    // Mark session as seen (done → idle transition)
     markSessionSeen(sessionId).catch(() => {});
-
     return () => { cancelled = true; };
   }, [projectHash, sessionId]);
 
-  // Load linked task
   useEffect(() => {
     let cancelled = false;
     fetchTasks().then(tasks => {
@@ -94,24 +91,23 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
-        Loading session...
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
       </div>
     );
   }
 
   if (error && !detail) {
-    // Still render terminal even if session detail fetch fails (e.g. mayor sessions)
     return (
       <div className="flex flex-col h-full">
-        <div className="border-b border-gray-800 px-6 py-3 bg-gray-900 shrink-0">
-          <div className="text-sm font-medium text-gray-200 truncate">
+        <div className="border-b border-border px-6 py-3 bg-card/50 shrink-0">
+          <div className="text-sm font-medium text-foreground truncate font-mono">
             {sessionId.slice(0, 8)}...
           </div>
         </div>
         <Suspense fallback={
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Loading terminal...
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
         }>
           <TerminalView sessionId={sessionId} projectPath={projectPath} />
@@ -129,30 +125,30 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b border-gray-800 px-6 py-3 bg-gray-900 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="text-sm font-medium text-gray-200 truncate">
+      <div className="border-b border-border px-6 py-3 bg-card/30 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="text-sm font-medium text-foreground truncate">
             {displayTitle}
           </div>
-          {/* Info button for session ID */}
+          {/* Info button */}
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setShowIdPopover(!showIdPopover)}
-              className="w-4 h-4 rounded-full border border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-400 flex items-center justify-center text-[9px] font-medium transition-colors"
+              className="w-5 h-5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground flex items-center justify-center transition-colors"
               title="Session info"
             >
-              i
+              <Info className="w-3 h-3" />
             </button>
             {showIdPopover && (
-              <div className="absolute left-0 top-7 z-20 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-2.5 min-w-[280px]">
-                <div className="text-[10px] text-gray-500 mb-1">Session ID</div>
+              <div className="absolute left-0 top-7 z-20 bg-popover border border-border rounded-lg shadow-xl p-3 min-w-[280px] animate-fade-in">
+                <div className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wider">Session ID</div>
                 <div className="flex items-center gap-2">
-                  <code className="text-xs text-gray-300 font-mono flex-1 truncate">{sessionId}</code>
+                  <code className="text-xs text-foreground font-mono flex-1 truncate bg-secondary/50 px-2 py-1 rounded">{sessionId}</code>
                   <button
                     onClick={handleCopyId}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-gray-200 transition-colors flex-shrink-0"
+                    className="text-xs px-2 py-1 rounded-md bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors flex-shrink-0 flex items-center gap-1"
                   >
-                    {copied ? 'Copied!' : 'Copy'}
+                    {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
                   </button>
                 </div>
               </div>
@@ -161,43 +157,38 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Jump to linked task */}
           {linkedTask && (
             <button
               onClick={handleJumpToTask}
-              className="text-xs px-2 py-1 rounded-md text-claude hover:bg-gray-800 transition-colors flex items-center gap-1"
+              className="text-xs px-2.5 py-1 rounded-md text-primary hover:bg-primary/10 transition-colors flex items-center gap-1 font-medium"
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-              Task
+              <ExternalLink className="w-3 h-3" /> Task
             </button>
           )}
 
-          {/* Tab switcher — only shown for merged sessions */}
           {hasMergedHistory && (
-            <div className="flex gap-1 bg-gray-800/50 rounded-lg p-0.5">
+            <div className="flex gap-0.5 bg-secondary/50 rounded-lg p-0.5">
               <button
                 onClick={() => setActiveTab('terminal')}
-                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                className={cn(
+                  'px-3 py-1 text-xs rounded-md transition-all font-medium flex items-center gap-1',
                   activeTab === 'terminal'
-                    ? 'bg-gray-700 text-gray-200'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
               >
-                Terminal
+                <Terminal className="w-3 h-3" /> Terminal
               </button>
               <button
                 onClick={() => setActiveTab('history')}
-                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                className={cn(
+                  'px-3 py-1 text-xs rounded-md transition-all font-medium flex items-center gap-1',
                   activeTab === 'history'
-                    ? 'bg-gray-700 text-gray-200'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
               >
-                History
+                <History className="w-3 h-3" /> History
               </button>
             </div>
           )}
@@ -207,16 +198,16 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
       {/* Content */}
       {activeTab === 'terminal' ? (
         <Suspense fallback={
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Loading terminal...
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
         }>
           <TerminalView sessionId={sessionId} projectPath={projectPath} isNew={isNew} />
         </Suspense>
       ) : (
         <Suspense fallback={
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Loading conversation...
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
         }>
           <ConversationView projectHash={projectHash} slug={slug!} />

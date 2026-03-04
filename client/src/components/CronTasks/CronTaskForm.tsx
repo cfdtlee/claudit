@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { CronTask } from '../../types';
+import { cn } from '../../lib/utils';
+import { Save, X, FolderOpen } from 'lucide-react';
 import FolderBrowser from '../FolderBrowser';
 import CronExpressionBuilder from './CronExpressionBuilder';
 
@@ -43,55 +45,65 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
     });
   };
 
+  const inputCls = 'w-full bg-background/80 border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all';
+  const labelCls = 'block text-xs text-muted-foreground mb-1.5 font-medium';
+
   return (
     <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-4">
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Task Name</label>
+        <label className={labelCls}>Task Name</label>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
           required
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
+          className={inputCls}
           placeholder="e.g. Daily code review"
         />
       </div>
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Schedule</label>
+        <label className={labelCls}>Schedule</label>
         <CronExpressionBuilder value={cronExpression} onChange={setCronExpression} />
       </div>
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Prompt</label>
+        <label className={labelCls}>Prompt</label>
         <textarea
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
           required
           rows={5}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude resize-none"
+          className={cn(inputCls, 'resize-none')}
           placeholder="The prompt to send to Claude..."
         />
-        <p className="text-xs text-gray-600 mt-1">Use <code className="text-gray-500 bg-gray-800 px-1 rounded">{'{{todos}}'}</code> to inject pending todo list into the prompt</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">
+          Use <code className="text-muted-foreground bg-secondary px-1 rounded">{'{{todos}}'}</code> to inject pending todo list into the prompt
+        </p>
       </div>
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Project Path (optional)</label>
+        <label className={labelCls}>Project Path (optional)</label>
         <div className="flex gap-2">
           <input
             type="text"
             value={projectPath}
             onChange={e => setProjectPath(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-claude"
+            className={cn(inputCls, 'flex-1')}
             placeholder="/path/to/project"
           />
           <button
             type="button"
             onClick={() => setShowBrowser(!showBrowser)}
-            className={`px-3 py-2 text-sm rounded-lg transition-colors ${showBrowser ? 'bg-claude text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+            className={cn(
+              'px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-1.5',
+              showBrowser
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            )}
           >
-            Browse
+            <FolderOpen className="w-3.5 h-3.5" /> Browse
           </button>
         </div>
         {showBrowser && (
-          <div className="mt-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+          <div className="mt-2 p-3 bg-secondary/30 border border-border/50 rounded-lg">
             <FolderBrowser onPathChange={(path) => {
               setProjectPath(path);
             }} />
@@ -103,7 +115,7 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
                   try { localStorage.setItem('claudit:lastBrowserPath', projectPath); } catch {}
                 }
               }}
-              className="mt-2 text-xs text-claude hover:text-blue-300"
+              className="mt-2 text-xs text-primary hover:text-primary/80 transition-colors"
             >
               Done
             </button>
@@ -116,23 +128,24 @@ export default function CronTaskForm({ initial, onSubmit, onCancel }: Props) {
           checked={enabled}
           onChange={e => setEnabled(e.target.checked)}
           id="task-enabled"
-          className="rounded"
+          className="rounded bg-secondary border-border accent-primary"
         />
-        <label htmlFor="task-enabled" className="text-sm text-gray-300">Enabled</label>
+        <label htmlFor="task-enabled" className="text-sm text-foreground">Enabled</label>
       </div>
-      <div className="flex gap-2 pt-2">
-        <button
-          type="submit"
-          className="px-4 py-2 bg-claude text-white text-sm rounded-lg hover:bg-claude-hover transition-colors"
-        >
-          {initial ? 'Save Changes' : 'Create Task'}
-        </button>
+      <div className="flex gap-2 justify-end pt-1">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-700 text-gray-300 text-sm rounded-lg hover:bg-gray-600 transition-colors"
+          className="text-xs px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors flex items-center gap-1"
         >
-          Cancel
+          <X className="w-3 h-3" /> Cancel
+        </button>
+        <button
+          type="submit"
+          className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5 font-medium shadow-sm shadow-primary/20"
+        >
+          <Save className="w-3 h-3" /> {initial ? 'Save Changes' : 'Create Task'}
+          <kbd className="text-[10px] opacity-70 bg-white/10 px-1 rounded">&#x2318;&#x21B5;</kbd>
         </button>
       </div>
     </form>

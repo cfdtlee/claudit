@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { cn } from '../../lib/utils';
+import { Folder, Send, Loader2, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
 import FolderBrowser from '../FolderBrowser';
 import { useUIStore } from '../../stores/useUIStore';
 
@@ -41,13 +43,10 @@ function Mascot({ running }: { running?: boolean }) {
         .leg-right { animation: ${running ? 'legRight 0.25s ease-in-out infinite' : 'none'}; }
         .body { animation: ${running ? 'bodyBounce 0.25s ease-in-out infinite' : 'none'}; }
       `}</style>
-      {/* Left legs */}
       <rect className="leg-left" x="2" y="13" width="1" height="3" fill="#c07040" />
       <rect className="leg-left" x="10" y="13" width="1" height="3" fill="#c07040" />
-      {/* Right legs */}
       <rect className="leg-right" x="5" y="13" width="1" height="3" fill="#c07040" />
       <rect className="leg-right" x="13" y="13" width="1" height="3" fill="#c07040" />
-      {/* Body */}
       <g className="body">
         <rect x="2" y="6" width="12" height="7" fill="#DA7756" rx="1" />
         <rect x="3" y="7" width="10" height="5" fill="#daa06d" />
@@ -87,14 +86,12 @@ export default function EmptyState({ onCreateSession }: Props) {
     inputRef.current?.focus();
   }, []);
 
-  // Persist draft on field changes
   useEffect(() => {
     if (prompt || projectPath || useWorktree || branchName) {
       setSessionDraft({ prompt, projectPath, useWorktree, branchName });
     }
   }, [prompt, projectPath, useWorktree, branchName, setSessionDraft]);
 
-  // Close folder picker on click outside
   useEffect(() => {
     if (!showFolderPicker) return;
     const handler = (e: MouseEvent) => {
@@ -137,8 +134,10 @@ export default function EmptyState({ onCreateSession }: Props) {
     setError(null);
   }, []);
 
+  const selectCls = 'text-[11px] bg-secondary text-secondary-foreground border border-border rounded-md px-2 py-1 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all';
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-gray-950 relative overflow-hidden">
+    <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
       {/* Mascot */}
       <div className="mb-6">
         <Mascot running={submitting} />
@@ -146,161 +145,141 @@ export default function EmptyState({ onCreateSession }: Props) {
 
       {/* Error banner */}
       {error && (
-        <div className="w-full max-w-[560px] mb-3 bg-red-950/50 border border-red-800/50 rounded-xl px-4 py-3 flex items-center gap-3">
-          <span className="text-red-400 text-sm flex-1">{error}</span>
+        <div className="w-full max-w-[560px] mb-3 bg-destructive/5 border border-destructive/20 rounded-xl px-4 py-3 flex items-center gap-3 animate-slide-in">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+          <span className="text-destructive text-sm flex-1">{error}</span>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="text-xs px-3 py-1.5 bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded-lg transition-colors flex-shrink-0"
+            className="text-xs px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg transition-colors flex-shrink-0 flex items-center gap-1"
           >
-            Retry
+            <RefreshCw className="w-3 h-3" /> Retry
           </button>
         </div>
       )}
 
       {/* Input card */}
-      <div className={`w-full max-w-[560px] ${submitting ? 'glow-border' : ''}`}>
-      <div className={`bg-gray-900 rounded-xl border border-gray-700 overflow-hidden relative z-[1] ${submitting ? 'glow-border-inner' : ''}`}>
-        {/* Prompt textarea */}
-        <div className="px-4 pt-3 pb-2">
-          <textarea
-            ref={inputRef}
-            value={prompt}
-            onChange={e => { setPrompt(e.target.value); setError(null); }}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe a task for Claude..."
-            rows={1}
-            className="w-full resize-none text-sm text-gray-200 placeholder-gray-500 bg-transparent outline-none"
-            style={{ minHeight: '24px', maxHeight: '120px' }}
-            onInput={e => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-            }}
-          />
-        </div>
-
-        {/* Action bar */}
-        <div className="flex items-center gap-2 px-3 pb-3">
-          <button
-            onClick={() => setShowFolderPicker(!showFolderPicker)}
-            className="text-gray-500 hover:text-gray-300 transition-colors p-1"
-            title="Change folder"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-
-          <div className="flex-1" />
-
-          {/* Send button */}
-          <button
-            onClick={handleSubmit}
-            disabled={!projectPath || submitting}
-            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 bg-claude hover:bg-claude-hover"
-            title={projectPath ? 'Create session (⌘+Enter)' : 'Select a project folder first'}
-          >
-            {submitting ? (
-              <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            )}
-          </button>
-        </div>
-
-        {/* Project path bar */}
-        <div className="flex items-center gap-2 px-3 pb-2.5 border-t border-gray-800 pt-2.5">
-          <button
-            onClick={() => setShowFolderPicker(!showFolderPicker)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-300 bg-gray-800 hover:bg-gray-750 rounded-md px-2 py-1 transition-colors border border-gray-700"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-            {folderName || 'Select folder'}
-          </button>
-
-          {isGitRepo && (
-            <span className="text-[10px] text-gray-500 bg-gray-800 rounded px-1.5 py-0.5 border border-gray-700">
-              git
-            </span>
-          )}
-
-          {isGitRepo && (
-            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer ml-auto">
-              <input
-                type="checkbox"
-                checked={useWorktree}
-                onChange={e => setUseWorktree(e.target.checked)}
-                className="rounded w-3 h-3 bg-gray-800 border-gray-600"
-              />
-              worktree
-            </label>
-          )}
-        </div>
-
-        {/* Model & Permission selectors */}
-        <div className="flex items-center gap-2 px-3 pb-2.5">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-gray-500">Model</span>
-            <select
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              className="text-[11px] bg-gray-800 text-gray-300 border border-gray-700 rounded px-1.5 py-0.5 outline-none focus:border-gray-500"
-            >
-              {MODEL_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-gray-500">Permissions</span>
-            <select
-              value={permissionMode}
-              onChange={e => setPermissionMode(e.target.value)}
-              className="text-[11px] bg-gray-800 text-gray-300 border border-gray-700 rounded px-1.5 py-0.5 outline-none focus:border-gray-500"
-            >
-              {PERMISSION_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Branch name input for worktree */}
-        {useWorktree && (
-          <div className="px-3 pb-2.5">
-            <input
-              value={branchName}
-              onChange={e => setBranchName(e.target.value)}
+      <div className={cn('w-full max-w-[560px]', submitting && 'glow-border')}>
+        <div className={cn(
+          'bg-card/40 backdrop-blur-xl rounded-xl border border-border/30 overflow-hidden relative z-[1] shadow-lg shadow-black/20',
+          submitting && 'glow-border-inner'
+        )}>
+          {/* Prompt textarea */}
+          <div className="px-4 pt-4 pb-2">
+            <textarea
+              ref={inputRef}
+              value={prompt}
+              onChange={e => { setPrompt(e.target.value); setError(null); }}
               onKeyDown={handleKeyDown}
-              placeholder="Branch name..."
-              autoFocus
-              className="w-full text-xs text-gray-300 bg-gray-800 px-2.5 py-1.5 rounded-md border border-gray-700 outline-none focus:border-gray-500 placeholder-gray-600"
+              placeholder="Describe a task for Claude..."
+              rows={1}
+              className="w-full resize-none text-sm text-foreground placeholder-muted-foreground bg-transparent outline-none"
+              style={{ minHeight: '24px', maxHeight: '120px' }}
+              onInput={e => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              }}
             />
           </div>
-        )}
-      </div>
+
+          {/* Action bar */}
+          <div className="flex items-center gap-2 px-3 pb-3">
+            <div className="flex-1" />
+            <button
+              onClick={handleSubmit}
+              disabled={!projectPath || submitting}
+              className={cn(
+                'w-8 h-8 rounded-lg flex items-center justify-center transition-all',
+                'disabled:opacity-30 bg-primary hover:bg-primary/90',
+                'shadow-sm shadow-primary/20'
+              )}
+              title={projectPath ? 'Create session' : 'Select a project folder first'}
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 text-primary-foreground" />
+              )}
+            </button>
+          </div>
+
+          {/* Project path bar */}
+          <div className="flex items-center gap-2 px-3 pb-2.5 border-t border-border pt-2.5">
+            <button
+              onClick={() => setShowFolderPicker(!showFolderPicker)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-md px-2 py-1 transition-colors border border-border/50"
+            >
+              <Folder className="w-3 h-3" />
+              {folderName || 'Select folder'}
+            </button>
+
+            {isGitRepo && (
+              <span className="text-[10px] text-muted-foreground bg-secondary rounded-md px-1.5 py-0.5 border border-border/50 flex items-center gap-1">
+                <GitBranch className="w-2.5 h-2.5" /> git
+              </span>
+            )}
+
+            {isGitRepo && (
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer ml-auto">
+                <input
+                  type="checkbox"
+                  checked={useWorktree}
+                  onChange={e => setUseWorktree(e.target.checked)}
+                  className="rounded w-3 h-3 bg-secondary border-border accent-primary"
+                />
+                worktree
+              </label>
+            )}
+          </div>
+
+          {/* Model & Permission */}
+          <div className="flex items-center gap-3 px-3 pb-2.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground font-medium">Model</span>
+              <select value={model} onChange={e => setModel(e.target.value)} className={selectCls}>
+                {MODEL_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground font-medium">Permissions</span>
+              <select value={permissionMode} onChange={e => setPermissionMode(e.target.value)} className={selectCls}>
+                {PERMISSION_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Branch name input */}
+          {useWorktree && (
+            <div className="px-3 pb-2.5">
+              <input
+                value={branchName}
+                onChange={e => setBranchName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Branch name..."
+                autoFocus
+                className="w-full text-xs text-foreground bg-secondary px-2.5 py-1.5 rounded-md border border-border outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 placeholder-muted-foreground transition-all"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Folder picker dropdown */}
+      {/* Folder picker */}
       {showFolderPicker && (
         <div
           ref={folderRef}
-          className="w-full max-w-[560px] mt-2 bg-gray-900 rounded-xl border border-gray-700 p-4 z-10"
+          className="w-full max-w-[560px] mt-2 bg-card/40 backdrop-blur-xl rounded-xl border border-border/30 p-4 z-10 shadow-xl animate-fade-in"
         >
           <FolderBrowser onPathChange={handlePathChange} />
           <div className="flex justify-end mt-3">
             <button
               onClick={() => setShowFolderPicker(false)}
-              className="text-xs px-3 py-1.5 rounded bg-claude text-white hover:bg-claude-hover transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
             >
               Done
             </button>
@@ -309,8 +288,8 @@ export default function EmptyState({ onCreateSession }: Props) {
       )}
 
       {/* Keyboard hint */}
-      <div className="mt-4 text-xs text-gray-600">
-        Press <kbd className="px-1.5 py-0.5 bg-gray-800 rounded border border-gray-700 text-gray-500 font-mono text-[10px]">⌘+Enter</kbd> to create
+      <div className="mt-4 text-xs text-muted-foreground/60">
+        Press <kbd className="px-1.5 py-0.5 bg-secondary rounded-md border border-border text-muted-foreground font-mono text-[10px]">&#8984;+Enter</kbd> to create
       </div>
     </div>
   );

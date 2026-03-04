@@ -5,166 +5,350 @@ import { z } from 'zod';
 import {
   getAllTasks,
   getTask,
+  getSubtasks,
   createTask,
   updateTask,
-  deleteTask,
+  updateTaskStatus,
 } from './services/taskStorage.js';
+import { getAllAgents, getAgent } from './services/agentStorage.js';
+import { getAllMessages, createMessage, markMessageRead, markAllRead, getUnreadCount } from './services/messageStorage.js';
+import { getSettingsObject, getSetting, setSetting } from './services/settingsStorage.js';
 
 const server = new McpServer({
   name: 'claudit',
-  version: '0.1.0',
+  version: '0.2.0',
 });
 
-const PRIORITY_LABELS: Record<number, string> = { 1: 'low', 2: 'medium', 3: 'high' };
-const PRIORITY_MAP: Record<string, number> = { low: 1, medium: 2, high: 3 };
+// Helper to return text content
+function text(t: string) {
+  return { content: [{ type: 'text' as const, text: t }] };
+}
 
-// --- list_todos ---
+function errorResult(msg: string) {
+  return { content: [{ type: 'text' as const, text: msg }], isError: true };
+}
+
+// --- get_tasks ---
 server.tool(
-  'list_todos',
-  'List all todos. Optionally filter by status (pending/completed) and priority (low/medium/high).',
+  'get_tasks',
+  'List tasks with optional filters. Returns task id, title, status, assignee, priority, and timestamps.',
   {
-    status: z.enum(['pending', 'completed', 'all']).optional().describe('Filter by completion status. Default: all'),
-    priority: z.enum(['low', 'medium', 'high']).optional().describe('Filter by priority level'),
-    groupId: z.string().optional().describe('Filter by group ID. Pass "ungrouped" to get only todos that are not assigned to any group.'),
+    status: z.string().optional().describe('Filter by task status (pending, running, waiting, done, failed, etc.)'),
+    assignee: z.string().optional().describe('Filter by agent ID assigned to the task'),
+    limit: z.number().optional().describe('Max number of tasks to return (default: 50)'),
   },
-  async ({ status, priority, groupId }) => {
-    let tasks = getAllTasks();
-    if (status === 'pending') tasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled');
-    else if (status === 'completed') tasks = tasks.filter(t => t.status === 'done');
-    if (priority) tasks = tasks.filter(t => t.priority === PRIORITY_MAP[priority]);
-    if (groupId === 'ungrouped') tasks = tasks.filter(t => !t.groupId);
-    else if (groupId) tasks = tasks.filter(t => t.groupId === groupId);
+  async ({ status, assignee, limit }) => {
+    let tasks = getAllTasks({ status: status as any, assignee });
+    const maxResults = limit ?? 50;
+    tasks = tasks.slice(0, maxResults);
+
+    if (tasks.length === 0) return text('No tasks found.');
 
     const summary = tasks.map(t => ({
       id: t.id,
       title: t.title,
-      description: t.description,
-      completed: t.status === 'done',
-      priority: PRIORITY_LABELS[t.priority ?? 2] ?? 'medium',
-      groupId: t.groupId,
-      position: t.order,
+      status: t.status,
+      assignee: t.assignee,
+      priority: t.priority,
+      parent_id: t.parent_id,
+      blocked_by: t.blocked_by,
       createdAt: t.createdAt,
-      completedAt: t.completedAt,
-      sessionId: t.sessionId,
+      updatedAt: t.updatedAt,
     }));
-
-    return {
-      content: [{
-        type: 'text' as const,
-        text: tasks.length === 0
-          ? 'No todos found.'
-          : JSON.stringify(summary, null, 2),
-      }],
-    };
+    return text(JSON.stringify(summary, null, 2));
   },
 );
 
-// --- get_todo ---
+// --- get_task ---
 server.tool(
-  'get_todo',
-  'Get full details of a specific todo by ID, including title, description, priority, completion status, linked session, and timestamps.',
+  'get_task',
+  'Get full details of a specific task by ID, including subtasks.',
   {
-    id: z.string().describe('The todo ID (UUID format, obtained from list_todos)'),
+    taskId: z.string().describe('The task ID'),
   },
-  async ({ id }) => {
-    const task = getTask(id);
-    if (!task) {
-      return {
-        content: [{ type: 'text' as const, text: `Todo not found: ${id}` }],
-        isError: true,
-      };
+  async ({ taskId }) => {
+    const task = getTask(taskId);
+    if (!task) return errorResult(`Task not found: ${taskId}`);
+
+    const subtasks = getSubtasks(taskId);
+    return text(JSON.stringify({ ...task, subtasks }, null, 2));
+  },
+);
+
+// --- get_agents ---
+server.tool(
+  'get_agents',
+  'List all configured agents with their specialties and system prompts.',
+  {},
+  async () => {
+    const agents = getAllAgents();
+    if (agents.length === 0) return text('No agents configured.');
+
+    const summary = agents.map(a => ({
+      id: a.id,
+      name: a.name,
+      specialty: a.specialty,
+      systemPrompt: a.systemPrompt?.slice(0, 200),
+      lastActiveAt: a.lastActiveAt,
+    }));
+    return text(JSON.stringify(summary, null, 2));
+  },
+);
+
+// --- get_messages ---
+server.tool(
+  'get_messages',
+  'Get Mayor messages (events, notifications, witness alerts). Use unreadOnly=true to see only new messages.',
+  {
+    unreadOnly: z.boolean().optional().describe('If true, only return unread messages'),
+  },
+  async ({ unreadOnly }) => {
+    const messages = getAllMessages({ unreadOnly: unreadOnly ?? false });
+    const count = getUnreadCount();
+
+    if (messages.length === 0) return text(`No messages. (${count} unread)`);
+
+    // Auto-mark fetched messages as read
+    if (unreadOnly) markAllRead();
+
+    const summary = messages.slice(0, 50).map(m => ({
+      id: m.id,
+      type: m.type,
+      source: m.source,
+      subject: m.subject,
+      body: m.body.slice(0, 500),
+      read: m.read,
+      createdAt: m.createdAt,
+    }));
+    return text(JSON.stringify({ unreadCount: count, messages: summary }, null, 2));
+  },
+);
+
+// --- get_settings ---
+server.tool(
+  'get_settings',
+  'Get current claudit configuration settings.',
+  {},
+  async () => {
+    const settings = getSettingsObject();
+    return text(JSON.stringify(settings, null, 2));
+  },
+);
+
+// --- create_task ---
+server.tool(
+  'create_task',
+  'Create a new task. For subtasks, set parentId to the parent task ID.',
+  {
+    title: z.string().describe('Short, actionable title for the task'),
+    prompt: z.string().optional().describe('Detailed prompt/instructions for the agent executing this task'),
+    parentId: z.string().optional().describe('Parent task ID (for subtasks)'),
+    assignee: z.string().optional().describe('Agent ID to assign this task to'),
+    blocked_by: z.array(z.string()).optional().describe('Array of task IDs that must complete before this task can start'),
+  },
+  async ({ title, prompt, parentId, assignee, blocked_by }) => {
+    // Validate parent exists if specified
+    if (parentId) {
+      const parent = getTask(parentId);
+      if (!parent) return errorResult(`Parent task not found: ${parentId}`);
     }
-    return {
-      content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }],
-    };
-  },
-);
 
-// --- create_todo ---
-server.tool(
-  'create_todo',
-  'Create a new todo item. Use this when the user asks to add a task, reminder, or action item. Returns the created todo with its generated ID.',
-  {
-    title: z.string().describe('Short, actionable title (e.g. "Fix login bug", "Review PR #42")'),
-    description: z.string().optional().describe('Longer details, context, or acceptance criteria for the todo'),
-    priority: z.enum(['low', 'medium', 'high']).optional().describe('Priority level: "high" for urgent/blocking items, "low" for nice-to-haves. Default: medium'),
-    sessionId: z.string().optional().describe('Claude Code session ID to link this todo to (for tracking which session created it)'),
-    sessionLabel: z.string().optional().describe('Human-readable label for the linked session (shown in UI)'),
-    groupId: z.string().optional().describe('Group ID to organize this todo under (obtained from the claudit dashboard)'),
-  },
-  async ({ title, description, priority, sessionId, sessionLabel, groupId }) => {
+    // Validate assignee exists if specified
+    if (assignee) {
+      const agent = getAgent(assignee);
+      if (!agent) return errorResult(`Agent not found: ${assignee}`);
+    }
+
     const task = createTask({
       title,
-      description,
+      prompt,
       status: 'pending',
-      created_by: 'human',
+      created_by: 'mayor',
       order: 0,
       retryCount: 0,
-      priority: PRIORITY_MAP[priority ?? 'medium'],
-      sessionId,
-      sessionLabel,
-      groupId,
+      parent_id: parentId,
+      assignee,
+      blocked_by,
     });
-    return {
-      content: [{ type: 'text' as const, text: `Created todo: ${task.id}\n${JSON.stringify(task, null, 2)}` }],
-    };
+
+    return text(`Created task: ${task.id}\n${JSON.stringify(task, null, 2)}`);
   },
 );
 
-// --- update_todo ---
+// --- update_task ---
 server.tool(
-  'update_todo',
-  'Update an existing todo. Only provided fields will be changed \u2014 omitted fields remain unchanged. Use this to mark todos complete, change priority, edit text, or move between groups.',
+  'update_task',
+  'Update a task\'s status, assignee, or error message. Status transitions are validated.',
   {
-    id: z.string().describe('The todo ID to update (UUID format, obtained from list_todos)'),
-    title: z.string().optional().describe('New title to replace the existing one'),
-    description: z.string().optional().describe('New description to replace the existing one'),
-    completed: z.boolean().optional().describe('Set true to mark as done, false to reopen. Completing a todo automatically records a completedAt timestamp'),
-    priority: z.enum(['low', 'medium', 'high']).optional().describe('New priority level'),
-    groupId: z.string().nullable().optional().describe('Move todo to a different group. Pass a group ID to assign, or null to remove from its current group'),
+    taskId: z.string().describe('The task ID to update'),
+    status: z.string().optional().describe('New status (pending, running, waiting, done, failed, cancelled, paused)'),
+    assignee: z.string().optional().describe('Agent ID to assign'),
+    errorMessage: z.string().optional().describe('Error message (for failed/waiting tasks)'),
+    resultSummary: z.string().optional().describe('Result summary (for completed tasks)'),
   },
-  async ({ id, title, description, completed, priority, groupId }) => {
+  async ({ taskId, status, assignee, errorMessage, resultSummary }) => {
+    let task;
+
+    if (status) {
+      task = updateTaskStatus(taskId, status as any);
+      if (!task) {
+        const existing = getTask(taskId);
+        if (!existing) return errorResult(`Task not found: ${taskId}`);
+        return errorResult(`Invalid status transition: ${existing.status} → ${status}`);
+      }
+    }
+
     const updates: Record<string, unknown> = {};
-    if (title !== undefined) updates.title = title;
-    if (description !== undefined) updates.description = description;
-    if (priority !== undefined) updates.priority = PRIORITY_MAP[priority];
-    if (groupId !== undefined) updates.groupId = groupId;
-    if (completed !== undefined) {
-      updates.status = completed ? 'done' : 'pending';
-      if (completed) updates.completedAt = new Date().toISOString();
+    if (assignee !== undefined) updates.assignee = assignee;
+    if (errorMessage !== undefined) updates.errorMessage = errorMessage;
+    if (resultSummary !== undefined) updates.resultSummary = resultSummary;
+
+    if (Object.keys(updates).length > 0) {
+      task = updateTask(taskId, updates);
+      if (!task) return errorResult(`Task not found: ${taskId}`);
     }
 
-    const task = updateTask(id, updates);
     if (!task) {
-      return {
-        content: [{ type: 'text' as const, text: `Todo not found: ${id}` }],
-        isError: true,
-      };
+      task = getTask(taskId);
+      if (!task) return errorResult(`Task not found: ${taskId}`);
     }
-    return {
-      content: [{ type: 'text' as const, text: `Updated todo: ${task.id}\n${JSON.stringify(task, null, 2)}` }],
-    };
+
+    return text(`Updated task: ${task.id}\n${JSON.stringify(task, null, 2)}`);
   },
 );
 
-// --- delete_todo ---
+// --- assign_task ---
 server.tool(
-  'delete_todo',
-  'Permanently delete a todo. This cannot be undone. Prefer marking as completed (update_todo with completed=true) unless the user explicitly wants to remove it.',
+  'assign_task',
+  'Assign a task to a specific agent. Validates that both the task and agent exist.',
   {
-    id: z.string().describe('The todo ID to delete (UUID format, obtained from list_todos)'),
+    taskId: z.string().describe('The task ID'),
+    agentId: z.string().describe('The agent ID to assign'),
   },
-  async ({ id }) => {
-    const deleted = deleteTask(id);
-    if (!deleted) {
-      return {
-        content: [{ type: 'text' as const, text: `Todo not found: ${id}` }],
-        isError: true,
-      };
-    }
-    return {
-      content: [{ type: 'text' as const, text: `Deleted todo: ${id}` }],
-    };
+  async ({ taskId, agentId }) => {
+    const task = getTask(taskId);
+    if (!task) return errorResult(`Task not found: ${taskId}`);
+
+    const agent = getAgent(agentId);
+    if (!agent) return errorResult(`Agent not found: ${agentId}`);
+
+    const updated = updateTask(taskId, { assignee: agentId });
+    return text(`Assigned task "${task.title}" to agent "${agent.name}"\n${JSON.stringify(updated, null, 2)}`);
+  },
+);
+
+// --- spawn_session ---
+server.tool(
+  'spawn_session',
+  'Spawn a new Claude Code agent session to work on a task. The agent will receive the task prompt and begin working.',
+  {
+    taskId: z.string().describe('The task ID to work on'),
+    agentId: z.string().describe('The agent ID to use'),
+  },
+  async ({ taskId, agentId }) => {
+    // Note: The actual spawning is handled server-side via HTTP.
+    // In MCP context, we create a message requesting the spawn.
+    // The server's event loop will pick this up.
+    const task = getTask(taskId);
+    if (!task) return errorResult(`Task not found: ${taskId}`);
+
+    const agent = getAgent(agentId);
+    if (!agent) return errorResult(`Agent not found: ${agentId}`);
+
+    // Create a spawn request message that the server will process
+    createMessage({
+      type: 'event',
+      source: 'mayor',
+      subject: `spawn_request`,
+      body: JSON.stringify({ taskId, agentId }),
+    });
+
+    // Update task to indicate it's being prepared
+    updateTask(taskId, { assignee: agentId });
+
+    return text(`Spawn request created for task "${task.title}" with agent "${agent.name}". The session will be started by the server. Check get_messages() for status updates.`);
+  },
+);
+
+// --- kill_session ---
+server.tool(
+  'kill_session',
+  'Request to stop a running agent session.',
+  {
+    sessionId: z.string().describe('The Claude session ID to stop'),
+  },
+  async ({ sessionId }) => {
+    createMessage({
+      type: 'event',
+      source: 'mayor',
+      subject: 'kill_request',
+      body: JSON.stringify({ sessionId }),
+    });
+    return text(`Kill request created for session ${sessionId}. The server will process it.`);
+  },
+);
+
+// --- send_to_agent ---
+server.tool(
+  'send_to_agent',
+  'Send a message to a running agent session.',
+  {
+    agentId: z.string().describe('The agent ID to send the message to'),
+    message: z.string().describe('The message content to send'),
+  },
+  async ({ agentId, message }) => {
+    createMessage({
+      type: 'event',
+      source: 'mayor',
+      subject: 'send_to_agent',
+      body: JSON.stringify({ agentId, message }),
+    });
+    return text(`Message queued for agent ${agentId}.`);
+  },
+);
+
+// --- notify_human ---
+server.tool(
+  'notify_human',
+  'Send a notification message to the human operator. Shows up in the claudit dashboard.',
+  {
+    message: z.string().describe('The notification message for the human'),
+  },
+  async ({ message }) => {
+    const msg = createMessage({
+      type: 'notification',
+      source: 'mayor',
+      subject: 'Mayor notification',
+      body: message,
+    });
+    return text(`Notification sent: ${msg.id}`);
+  },
+);
+
+// --- sleep ---
+server.tool(
+  'sleep',
+  'Wait for a specified duration (useful for polling agent completion). Max 300 seconds.',
+  {
+    seconds: z.number().describe('Number of seconds to sleep (max 300)'),
+  },
+  async ({ seconds }) => {
+    const duration = Math.min(Math.max(1, seconds), 300);
+    await new Promise(resolve => setTimeout(resolve, duration * 1000));
+    return text(`Slept for ${duration} seconds.`);
+  },
+);
+
+// --- handoff ---
+server.tool(
+  'handoff',
+  'Save a context summary before your session ends. The server will re-invoke Mayor with this summary.',
+  {
+    summary: z.string().describe('Summary of current state and pending actions for the next Mayor invocation'),
+  },
+  async ({ summary }) => {
+    setSetting('mayorHandoffSummary', summary);
+    return text('Handoff summary saved. Mayor will be re-invoked with this context.');
   },
 );
 

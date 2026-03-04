@@ -28,8 +28,8 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Parsed
       <div
         className={`max-w-[85%] rounded-lg px-4 py-2.5 text-sm ${
           isUser
-            ? 'bg-claude/20 text-gray-200'
-            : 'bg-gray-800 text-gray-300'
+            ? 'bg-primary/15 text-foreground'
+            : 'bg-card text-secondary-foreground'
         }`}
       >
         {isUser ? (
@@ -55,7 +55,7 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Parsed
                     );
                   }
                   return (
-                    <code className="bg-gray-700/50 px-1 py-0.5 rounded text-xs" {...props}>
+                    <code className="bg-secondary/50 px-1 py-0.5 rounded text-xs" {...props}>
                       {children}
                     </code>
                   );
@@ -74,11 +74,11 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Parsed
 function SessionBoundary({ index }: { index: number }) {
   return (
     <div className="flex items-center gap-3 my-4 px-4">
-      <div className="flex-1 border-t border-gray-700/50" />
-      <span className="text-xs text-gray-500 whitespace-nowrap">
+      <div className="flex-1 border-t border-border/50" />
+      <span className="text-xs text-muted-foreground whitespace-nowrap">
         continued in session {index + 1}
       </span>
-      <div className="flex-1 border-t border-gray-700/50" />
+      <div className="flex-1 border-t border-border/50" />
     </div>
   );
 }
@@ -132,7 +132,6 @@ export default function ConversationView({ projectHash, slug }: Props) {
     if (!data || !containerRef.current) return;
     const startIndex = Math.max(0, data.messages.length - visibleCount);
     if (startIndex < prevStartIndex.current && initialScrollDone.current) {
-      // More messages were prepended — restore scroll position
       const el = containerRef.current;
       const prevScrollHeight = el.scrollHeight;
       requestAnimationFrame(() => {
@@ -159,7 +158,7 @@ export default function ConversationView({ projectHash, slug }: Props) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
         Loading conversation...
       </div>
     );
@@ -167,7 +166,7 @@ export default function ConversationView({ projectHash, slug }: Props) {
 
   if (error) {
     return (
-      <div className="flex-1 flex items-center justify-center text-red-400">
+      <div className="flex-1 flex items-center justify-center text-destructive">
         {error}
       </div>
     );
@@ -175,7 +174,7 @@ export default function ConversationView({ projectHash, slug }: Props) {
 
   if (!data || data.messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
         No messages in this session.
       </div>
     );
@@ -192,16 +191,16 @@ export default function ConversationView({ projectHash, slug }: Props) {
       onScroll={handleScroll}
     >
       {startIndex > 0 && (
-        <div className="flex items-center justify-center gap-3 text-xs text-gray-500 mb-4">
+        <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground mb-4">
           <button
-            className="hover:text-gray-300 transition-colors"
+            className="hover:text-foreground transition-colors"
             onClick={loadMore}
           >
             Load {Math.min(LOAD_MORE_COUNT, startIndex)} more...
           </button>
-          <span className="text-gray-600">|</span>
+          <span className="text-border">|</span>
           <button
-            className="hover:text-gray-300 transition-colors"
+            className="hover:text-foreground transition-colors"
             onClick={() => setVisibleCount(data.messages.length)}
           >
             Load all ({startIndex} remaining)

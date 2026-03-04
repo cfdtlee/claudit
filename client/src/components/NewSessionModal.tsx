@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { cn } from '../lib/utils';
+import { X, Plus, GitBranch } from 'lucide-react';
 import FolderBrowser from './FolderBrowser';
 
 const MODEL_OPTIONS = [
@@ -44,36 +46,47 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
     onCreate(currentPath, worktree, model, permissionMode);
   };
 
+  const inputCls = 'w-full bg-background/80 border border-border/50 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all';
+  const labelCls = 'block text-xs text-muted-foreground mb-1 font-medium';
+
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-700 rounded-lg p-6 w-[480px] max-h-[80vh] overflow-y-auto"
+        className="glass-panel-elevated border border-border/30 rounded-xl p-6 w-[480px] max-h-[80vh] overflow-y-auto shadow-2xl animate-fade-in"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-gray-200 mb-4">New Session</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">New Session</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Pick a project directory to start</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
         <FolderBrowser onPathChange={handlePathChange} />
 
         {/* Model & Permission selectors */}
-        <div className="mt-3 flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-400">Model</label>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Model</label>
             <select
               value={model}
               onChange={e => setModel(e.target.value)}
-              className="text-xs bg-gray-800 text-gray-200 border border-gray-700 rounded px-2 py-1 outline-none focus:border-claude"
+              className={inputCls}
             >
               {MODEL_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-400">Permissions</label>
+          <div>
+            <label className={labelCls}>Permissions</label>
             <select
               value={permissionMode}
               onChange={e => setPermissionMode(e.target.value)}
-              className="text-xs bg-gray-800 text-gray-200 border border-gray-700 rounded px-2 py-1 outline-none focus:border-claude"
+              className={inputCls}
             >
               {PERMISSION_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -82,17 +95,17 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
           </div>
         </div>
 
-        {/* Git worktree toggle — shown when browsing a git repo */}
+        {/* Git worktree toggle */}
         {isGitRepo && (
-          <div className="mt-3 p-2 bg-gray-800/50 rounded border border-gray-700">
-            <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+          <div className="mt-3 p-3 bg-background/60 rounded-lg border border-border/50">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
               <input
                 type="checkbox"
                 checked={useWorktree}
                 onChange={e => setUseWorktree(e.target.checked)}
-                className="rounded bg-gray-800 border-gray-600"
+                className="rounded bg-secondary border-border accent-primary"
               />
-              Create git worktree
+              <GitBranch className="w-3 h-3" /> Create git worktree
             </label>
             {useWorktree && (
               <input
@@ -100,26 +113,26 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
                 onChange={e => setBranchName(e.target.value)}
                 placeholder="Branch name..."
                 autoFocus
-                className="mt-2 w-full text-sm bg-gray-800 text-gray-200 px-3 py-1.5 rounded border border-gray-600 outline-none focus:border-claude"
+                className={cn(inputCls, 'mt-2')}
               />
             )}
           </div>
         )}
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex justify-end gap-2 mt-5">
           <button
             onClick={onClose}
-            className="text-xs px-3 py-1.5 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
+            className="text-xs px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={!currentPath || (useWorktree && !branchName.trim())}
-            className="text-xs px-3 py-1.5 rounded bg-claude text-white hover:bg-claude-hover disabled:opacity-50"
+            className="text-xs px-4 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all font-medium flex items-center gap-1.5 shadow-sm shadow-primary/20"
           >
-            Create
+            <Plus className="w-3 h-3" /> Create
           </button>
         </div>
       </div>

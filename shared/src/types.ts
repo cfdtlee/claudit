@@ -103,6 +103,7 @@ export interface Agent {
   specialty?: string;
   systemPrompt: string;
   recentSummary?: string;
+  isSystem?: boolean;
   createdAt: string;
   updatedAt: string;
   lastActiveAt?: string;
@@ -189,6 +190,18 @@ export interface TaskSession {
   resultPath?: string;
   tokenUsage?: number;
   checkpoints?: Checkpoint[];
+}
+
+// --- Mayor Message Types ---
+
+export interface MayorMessage {
+  id: string;
+  type: 'event' | 'human' | 'notification' | 'witness';
+  source: string;
+  subject?: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
 }
 
 // --- Settings Types ---

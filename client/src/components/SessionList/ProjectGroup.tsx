@@ -1,5 +1,8 @@
+import { memo } from 'react';
 import { ProjectGroup as ProjectGroupType } from '../../types';
 import { useSessionStore } from '../../stores/useSessionStore';
+import { cn } from '../../lib/utils';
+import { ChevronRight, FolderOpen } from 'lucide-react';
 import SessionItem from './SessionItem';
 
 interface Props {
@@ -14,8 +17,6 @@ function shortProjectName(path: string): string {
   const parts = path.split('/').filter(Boolean);
   return parts.slice(-2).join('/');
 }
-
-import { memo } from 'react';
 
 function ProjectGroup({ group, isArchived, selectedIds, onSessionClick, onSessionContextMenu }: Props) {
   const expandedSet = useSessionStore(s => s.expandedSet);
@@ -36,20 +37,22 @@ function ProjectGroup({ group, isArchived, selectedIds, onSessionClick, onSessio
   };
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <button
         onClick={handleToggle}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-gray-850 hover:bg-gray-800
-                   text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-800"
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-accent/50
+                   text-xs font-medium text-muted-foreground tracking-wide transition-colors"
       >
-        <span className={`transition-transform ${expanded ? 'rotate-90' : ''}`}>
-          ▶
-        </span>
+        <ChevronRight className={cn(
+          'w-3 h-3 transition-transform duration-150',
+          expanded && 'rotate-90'
+        )} />
+        <FolderOpen className="w-3 h-3 text-muted-foreground/70" />
         <span className="truncate">{shortProjectName(group.projectPath)}</span>
-        <span className="ml-auto text-gray-600">{group.sessions.length}</span>
+        <span className="ml-auto text-muted-foreground/50 tabular-nums">{group.sessions.length}</span>
       </button>
       {expanded && (
-        <div>
+        <div className="animate-slide-in">
           {group.sessions.map(s => (
             <SessionItem
               key={s.sessionId}

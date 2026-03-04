@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Agent } from '../../types';
 import { fetchAgents, createAgent } from '../../api/agents';
+import { cn } from '../../lib/utils';
+import { Plus, Loader2, Bot } from 'lucide-react';
 
 interface Props {
   selectedAgentId: string | null;
@@ -48,28 +50,30 @@ export default function AgentList({ selectedAgentId, onSelect }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-200">Agents</h2>
-          <p className="text-xs text-gray-500">Coming soon</p>
-        </div>
+      <div className="p-4 border-b border-border/50 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-foreground">Agents</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors"
+          className={cn(
+            'text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1',
+            showForm
+              ? 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20'
+          )}
         >
-          {showForm ? 'Cancel' : '+ New'}
+          {showForm ? 'Cancel' : <><Plus className="w-3 h-3" /> New</>}
         </button>
       </div>
 
       {showForm && (
-        <div className="p-4 border-b border-gray-800 bg-gray-900/50 space-y-2">
+        <div className="p-4 border-b border-border/50 bg-card/50 space-y-2 animate-slide-in">
           <input
             type="text"
             placeholder="Agent name..."
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-claude"
+            className="w-full px-3 py-2.5 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
             autoFocus
           />
           <input
@@ -78,12 +82,12 @@ export default function AgentList({ selectedAgentId, onSelect }: Props) {
             value={newSpecialty}
             onChange={(e) => setNewSpecialty(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-claude"
+            className="w-full px-3 py-2.5 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
           />
           <button
             onClick={handleCreate}
             disabled={!newName.trim()}
-            className="w-full px-3 py-1.5 bg-claude text-white rounded-lg text-sm hover:bg-claude-hover transition-colors disabled:opacity-50"
+            className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-all disabled:opacity-50"
           >
             Create Agent
           </button>
@@ -92,28 +96,35 @@ export default function AgentList({ selectedAgentId, onSelect }: Props) {
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-gray-500 text-sm">Loading...</div>
+          <div className="p-6 flex justify-center">
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+          </div>
         ) : agents.length === 0 ? (
-          <div className="p-4 text-gray-500 text-sm text-center">
-            No agents yet. Create one to get started.
+          <div className="p-6 text-center">
+            <Bot className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">No agents yet</p>
+            <p className="text-muted-foreground/60 text-xs mt-1">Create one to get started</p>
           </div>
         ) : (
           agents.map(agent => (
             <button
               key={agent.id}
               onClick={() => onSelect(agent.id)}
-              className={`w-full text-left px-4 py-3 border-b border-gray-800/50 transition-colors ${
-                agent.id === selectedAgentId ? 'bg-gray-800' : 'hover:bg-gray-800/50'
-              }`}
+              className={cn(
+                'w-full text-left px-4 py-3 transition-all',
+                agent.id === selectedAgentId
+                  ? 'list-item-selected'
+                  : 'list-item-hover'
+              )}
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-claude to-purple-600 flex items-center justify-center text-white text-sm font-medium">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-sm font-semibold shadow-lg">
                   {agent.avatar || agent.name[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-gray-200 font-medium truncate">{agent.name}</div>
+                  <div className="text-sm text-foreground font-medium truncate">{agent.name}</div>
                   {agent.specialty && (
-                    <div className="text-xs text-gray-500 truncate">{agent.specialty}</div>
+                    <div className="text-xs text-muted-foreground truncate">{agent.specialty}</div>
                   )}
                 </div>
               </div>

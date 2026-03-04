@@ -5,8 +5,8 @@ import { db } from './database.js';
 const stmtAll = db.prepare('SELECT * FROM agents ORDER BY createdAt DESC');
 const stmtById = db.prepare('SELECT * FROM agents WHERE id = ?');
 const stmtInsert = db.prepare(`
-  INSERT INTO agents (id, name, avatar, specialty, systemPrompt, recentSummary, createdAt, updatedAt, lastActiveAt)
-  VALUES (@id, @name, @avatar, @specialty, @systemPrompt, @recentSummary, @createdAt, @updatedAt, @lastActiveAt)
+  INSERT INTO agents (id, name, avatar, specialty, systemPrompt, recentSummary, isSystem, createdAt, updatedAt, lastActiveAt)
+  VALUES (@id, @name, @avatar, @specialty, @systemPrompt, @recentSummary, @isSystem, @createdAt, @updatedAt, @lastActiveAt)
 `);
 const stmtDelete = db.prepare('DELETE FROM agents WHERE id = ?');
 
@@ -21,6 +21,7 @@ function rowToAgent(row: any): Agent {
   if (row.avatar != null) agent.avatar = row.avatar;
   if (row.specialty != null) agent.specialty = row.specialty;
   if (row.recentSummary != null) agent.recentSummary = row.recentSummary;
+  if (row.isSystem) agent.isSystem = true;
   if (row.lastActiveAt != null) agent.lastActiveAt = row.lastActiveAt;
   return agent;
 }
@@ -33,6 +34,7 @@ function agentToParams(agent: Agent) {
     specialty: agent.specialty ?? null,
     systemPrompt: agent.systemPrompt,
     recentSummary: agent.recentSummary ?? null,
+    isSystem: agent.isSystem ? 1 : 0,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
     lastActiveAt: agent.lastActiveAt ?? null,
@@ -70,6 +72,8 @@ export function updateAgent(id: string, updates: Partial<Agent>): Agent | null {
 }
 
 export function deleteAgent(id: string): boolean {
+  const agent = getAgent(id);
+  if (agent?.isSystem) throw new Error('Cannot delete system agent');
   const result = stmtDelete.run(id);
   return result.changes > 0;
 }

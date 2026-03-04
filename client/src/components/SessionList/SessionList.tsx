@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { archiveSession as apiArchiveSession, deleteSession as apiDeleteSession } from '../../api/sessions';
+import { cn } from '../../lib/utils';
+import { ChevronDown, ChevronRight, Archive, Trash2, X, Plus, ChevronsUpDown } from 'lucide-react';
 import SearchBar from './SearchBar';
 import ProjectGroup from './ProjectGroup';
 
@@ -48,13 +50,11 @@ export default function SessionList() {
   const menuRef = useRef<HTMLDivElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Initial load
   useEffect(() => {
     fetchSessions();
     fetchArchived();
   }, [fetchSessions, fetchArchived]);
 
-  // Debounced query search — always search content when query present
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query) {
@@ -67,7 +67,6 @@ export default function SessionList() {
     return () => clearTimeout(timer);
   }, [query, fetchSessions, searchContent, clearContentSearch]);
 
-  // Close status dropdown on click outside
   useEffect(() => {
     if (!statusDropdownOpen) return;
     const handler = (e: MouseEvent) => {
@@ -79,7 +78,6 @@ export default function SessionList() {
     return () => document.removeEventListener('mousedown', handler);
   }, [statusDropdownOpen]);
 
-  // Filter groups by status client-side
   const filteredGroups = useMemo(() => {
     if (statusFilter.size === 0) return groups;
     return groups.map(g => ({
@@ -88,7 +86,6 @@ export default function SessionList() {
     })).filter(g => g.sessions.length > 0);
   }, [groups, statusFilter]);
 
-  // Flat list of visible sessions for shift-click range selection
   const flatVisibleSessions = useMemo(() => {
     const result: { sessionId: string; projectHash: string; projectPath: string; isArchived: boolean }[] = [];
     for (const g of filteredGroups) {
@@ -110,7 +107,6 @@ export default function SessionList() {
     return result;
   }, [filteredGroups, archivedGroups, expandedSet, archivedExpanded, archivedGroupExpanded]);
 
-  // Build a lookup: sessionId → { projectHash, isArchived }
   const sessionLookup = useMemo(() => {
     const map = new Map<string, { projectHash: string; projectPath: string; isArchived: boolean }>();
     for (const g of groups) {
@@ -126,7 +122,6 @@ export default function SessionList() {
     return map;
   }, [groups, archivedGroups]);
 
-  // Escape clears selection, click-outside closes context menu
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -151,7 +146,6 @@ export default function SessionList() {
     const flatIndex = flatVisibleSessions.findIndex(s => s.sessionId === sessionId);
 
     if (e.shiftKey && lastClickedIndexRef.current >= 0) {
-      // Range select
       const start = Math.min(lastClickedIndexRef.current, flatIndex);
       const end = Math.max(lastClickedIndexRef.current, flatIndex);
       const next = new Set(selectedIds);
@@ -160,17 +154,12 @@ export default function SessionList() {
       }
       setSelectedIds(next);
     } else if (e.metaKey || e.ctrlKey) {
-      // Toggle single
       const next = new Set(selectedIds);
-      if (next.has(sessionId)) {
-        next.delete(sessionId);
-      } else {
-        next.add(sessionId);
-      }
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
       setSelectedIds(next);
       lastClickedIndexRef.current = flatIndex;
     } else {
-      // Plain click — clear selection and open detail (always select, never deselect)
       setSelectedIds(new Set());
       setContextMenu(null);
       const info = sessionLookup.get(sessionId);
@@ -183,15 +172,11 @@ export default function SessionList() {
 
   const handleSessionContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.preventDefault();
-
-    // If right-clicking an item not in selection, select just that item
     let activeSelection = selectedIds;
     if (!selectedIds.has(sessionId)) {
       activeSelection = new Set([sessionId]);
       setSelectedIds(activeSelection);
     }
-
-    // Determine if selection contains archived / unarchived items
     let hasArchived = false;
     let hasUnarchived = false;
     for (const id of activeSelection) {
@@ -199,7 +184,6 @@ export default function SessionList() {
       if (info?.isArchived) hasArchived = true;
       else hasUnarchived = true;
     }
-
     setContextMenu({ x: e.clientX, y: e.clientY, hasArchived, hasUnarchived });
   }, [selectedIds, sessionLookup]);
 
@@ -214,9 +198,7 @@ export default function SessionList() {
     setContextMenu(null);
     const ids = Array.from(selectedIds);
     try {
-      for (const id of ids) {
-        await apiArchiveSession(id, true);
-      }
+      for (const id of ids) await apiArchiveSession(id, true);
     } catch (e: any) {
       alert(`Failed to archive some sessions: ${e.message}`);
     }
@@ -228,9 +210,7 @@ export default function SessionList() {
     setContextMenu(null);
     const ids = Array.from(selectedIds);
     try {
-      for (const id of ids) {
-        await apiArchiveSession(id, false);
-      }
+      for (const id of ids) await apiArchiveSession(id, false);
     } catch (e: any) {
       alert(`Failed to unarchive some sessions: ${e.message}`);
     }
@@ -242,14 +222,11 @@ export default function SessionList() {
     setContextMenu(null);
     const count = selectedIds.size;
     if (!window.confirm(`Are you sure you want to permanently delete ${count} session${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
-
     const ids = Array.from(selectedIds);
     try {
       for (const id of ids) {
         const info = sessionLookup.get(id);
-        if (info) {
-          await apiDeleteSession(info.projectHash, id);
-        }
+        if (info) await apiDeleteSession(info.projectHash, id);
       }
     } catch (e: any) {
       alert(`Failed to delete some sessions: ${e.message}`);
@@ -270,54 +247,61 @@ export default function SessionList() {
     : Array.from(statusFilter).join(', ');
 
   const allExpanded = filteredGroups.length > 0 && filteredGroups.every(g => expandedSet.has(g.projectHash));
-
   const clearSelected = useUIStore(s => s.clearSelected);
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-800">
+      {/* Header */}
+      <div className="p-4 border-b border-border/50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-lg font-semibold text-gray-200">Sessions</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">Sessions</h2>
             <button
               onClick={toggleAllGroups}
               title={allExpanded ? 'Collapse all' : 'Expand all'}
-              className="text-gray-500 hover:text-gray-300 transition-colors p-0.5"
+              className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-accent"
             >
-              <span className={`inline-block text-xs transition-transform ${allExpanded ? 'rotate-90' : ''}`}>▶</span>
+              <ChevronsUpDown className="w-3.5 h-3.5" />
             </button>
           </div>
           <button
             onClick={() => clearSelected()}
             disabled={creating}
-            className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover disabled:opacity-50 transition-colors"
+            className={cn(
+              'text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1',
+              'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50',
+              'shadow-sm shadow-primary/20'
+            )}
           >
-            {creating ? '...' : '+ New'}
+            <Plus className="w-3 h-3" />
+            {creating ? '...' : 'New'}
           </button>
         </div>
-        {/* Status filter dropdown */}
-        <div className="relative mt-2" ref={statusDropdownRef}>
+
+        {/* Status filter */}
+        <div className="relative mt-2.5" ref={statusDropdownRef}>
           <button
             onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-            className="w-full flex items-center justify-between text-xs px-3 py-1.5 rounded-md border border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600 transition-colors"
+            className="w-full flex items-center justify-between text-xs px-3 py-1.5 rounded-lg border border-border/50 bg-secondary/30 text-secondary-foreground hover:bg-secondary/50 transition-colors"
           >
             <span className="truncate capitalize">{statusLabel}</span>
-            <svg className={`w-3 h-3 ml-1 text-gray-500 transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+            <ChevronDown className={cn(
+              'w-3 h-3 text-muted-foreground transition-transform',
+              statusDropdownOpen && 'rotate-180'
+            )} />
           </button>
           {statusDropdownOpen && (
-            <div className="absolute z-30 mt-1 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1">
+            <div className="absolute z-30 mt-1 w-full bg-popover border border-border rounded-lg shadow-xl py-1 animate-fade-in">
               {STATUS_OPTIONS.map(status => (
                 <label
                   key={status}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent cursor-pointer transition-colors"
                 >
                   <input
                     type="checkbox"
                     checked={statusFilter.has(status)}
                     onChange={() => toggleStatusOption(status)}
-                    className="rounded w-3 h-3 bg-gray-900 border-gray-600"
+                    className="rounded w-3 h-3 bg-secondary border-border accent-primary"
                   />
                   <span className="capitalize">{status}</span>
                 </label>
@@ -325,7 +309,7 @@ export default function SessionList() {
               {statusFilter.size > 0 && (
                 <button
                   onClick={() => setStatusFilter(new Set())}
-                  className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors border-t border-gray-700 mt-1"
+                  className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border-t border-border mt-1"
                 >
                   Clear filter
                 </button>
@@ -335,54 +319,51 @@ export default function SessionList() {
         </div>
       </div>
 
-      {/* Selection action bar */}
+      {/* Selection bar */}
       {selectedIds.size > 0 && (
-        <div className="px-3 py-1.5 bg-claude/10 border-b border-claude/20 flex items-center gap-2">
-          <span className="text-xs text-claude mr-auto">{selectedIds.size} selected</span>
+        <div className="px-3 py-2 bg-primary/5 border-b border-primary/10 flex items-center gap-2 animate-slide-in">
+          <span className="text-xs text-primary font-medium mr-auto">{selectedIds.size} selected</span>
           <button
             onClick={handleBatchArchive}
-            className="text-xs px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+            className="text-xs px-2 py-1 rounded-md bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors flex items-center gap-1"
           >
-            Archive
+            <Archive className="w-3 h-3" /> Archive
           </button>
           <button
             onClick={handleBatchDelete}
-            className="text-xs px-2 py-0.5 rounded bg-red-900/50 hover:bg-red-800/50 text-red-400 transition-colors"
+            className="text-xs px-2 py-1 rounded-md bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors flex items-center gap-1"
           >
-            Delete
+            <Trash2 className="w-3 h-3" /> Delete
           </button>
           <button
             onClick={() => { setSelectedIds(new Set()); setContextMenu(null); }}
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors ml-1"
+            className="text-muted-foreground hover:text-foreground transition-colors ml-1"
             title="Clear selection (Esc)"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      <SearchBar
-        value={query}
-        onChange={setQuery}
-      />
-      <div className="flex-1 overflow-y-auto">
-        {/* Content search results — shown when query is present */}
+      <SearchBar value={query} onChange={setQuery} />
+
+      <div className="flex-1 sidebar-scroll">
         {query ? (
           contentSearching ? (
-            <div className="p-4 text-sm text-gray-500">Searching content...</div>
+            <div className="p-4 text-sm text-muted-foreground">Searching content...</div>
           ) : contentSearchResults.length === 0 ? (
-            <div className="p-4 text-sm text-gray-500">No matches found</div>
+            <div className="p-4 text-sm text-muted-foreground">No matches found</div>
           ) : (
             contentSearchResults.map(r => (
               <button
                 key={r.sessionId}
                 onClick={() => selectSession(r.projectHash, r.sessionId, r.projectPath)}
-                className="w-full text-left border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors"
+                className="w-full text-left hover:bg-accent/50 transition-colors"
               >
                 <div className="px-4 py-2.5">
-                  <div className="text-sm text-gray-300 truncate">{r.projectPath.split('/').pop()}/{r.sessionId.slice(0, 8)}</div>
-                  <div className="text-xs text-gray-500 mt-1 truncate">{r.snippet}</div>
-                  <div className="text-[10px] text-gray-600 mt-0.5">{r.matchCount} match{r.matchCount > 1 ? 'es' : ''}</div>
+                  <div className="text-sm text-foreground truncate">{r.projectPath.split('/').pop()}/{r.sessionId.slice(0, 8)}</div>
+                  <div className="text-xs text-muted-foreground mt-1 truncate">{r.snippet}</div>
+                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">{r.matchCount} match{r.matchCount > 1 ? 'es' : ''}</div>
                 </div>
               </button>
             ))
@@ -390,13 +371,15 @@ export default function SessionList() {
         ) : (
         <>
         {loading && (
-          <div className="p-4 text-sm text-gray-500">Loading sessions...</div>
+          <div className="p-4 text-sm text-muted-foreground">Loading sessions...</div>
         )}
         {error && (
-          <div className="p-4 text-sm text-red-400">{error}</div>
+          <div className="p-4 text-sm text-destructive">{error}</div>
         )}
         {!loading && !error && filteredGroups.length === 0 && archivedCount === 0 && (
-          <div className="p-4 text-sm text-gray-500">No sessions found</div>
+          <div className="p-6 text-sm text-muted-foreground text-center">
+            <p>No sessions found</p>
+          </div>
         )}
         {filteredGroups.map(g => (
           <ProjectGroup
@@ -410,15 +393,17 @@ export default function SessionList() {
 
         {/* Archived section */}
         {archivedCount > 0 && (
-          <div className="border-t border-gray-800 mt-2">
+          <div className="border-t border-border/30 mt-1">
             <button
               onClick={() => setArchivedExpanded(!archivedExpanded)}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800
-                         text-xs font-medium text-gray-500 border-b border-gray-800"
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-accent/50
+                         text-xs font-medium text-muted-foreground transition-colors"
             >
-              <span className={`transition-transform ${archivedExpanded ? 'rotate-90' : ''}`}>
-                ▶
-              </span>
+              <ChevronRight className={cn(
+                'w-3 h-3 transition-transform',
+                archivedExpanded && 'rotate-90'
+              )} />
+              <Archive className="w-3 h-3" />
               <span>Archived ({archivedCount})</span>
             </button>
             {archivedExpanded && archivedGroups.map(g => (
@@ -437,41 +422,40 @@ export default function SessionList() {
         )}
       </div>
 
-      {/* Batch context menu */}
+      {/* Context menu */}
       {contextMenu && selectedIds.size > 0 && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[160px]"
+          className="fixed z-50 bg-popover border border-border rounded-lg shadow-2xl py-1 min-w-[160px] animate-fade-in"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700">
+          <div className="px-3 py-1.5 text-xs text-muted-foreground border-b border-border">
             {selectedIds.size} session{selectedIds.size > 1 ? 's' : ''}
           </div>
           {contextMenu.hasUnarchived && (
             <button
               onClick={handleBatchArchive}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+              className="w-full text-left px-3 py-1.5 text-sm text-popover-foreground hover:bg-accent transition-colors flex items-center gap-2"
             >
-              Archive
+              <Archive className="w-3.5 h-3.5" /> Archive
             </button>
           )}
           {contextMenu.hasArchived && (
             <button
               onClick={handleBatchUnarchive}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+              className="w-full text-left px-3 py-1.5 text-sm text-popover-foreground hover:bg-accent transition-colors flex items-center gap-2"
             >
-              Unarchive
+              <Archive className="w-3.5 h-3.5" /> Unarchive
             </button>
           )}
           <button
             onClick={handleBatchDelete}
-            className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-gray-700 transition-colors"
+            className="w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-accent transition-colors flex items-center gap-2"
           >
-            Delete
+            <Trash2 className="w-3.5 h-3.5" /> Delete
           </button>
         </div>
       )}
-
     </div>
   );
 }

@@ -8,6 +8,11 @@ import {
   fetchCronExecutions,
 } from '../../api/cron';
 import { fetchSessions } from '../../api/sessions';
+import { cn } from '../../lib/utils';
+import {
+  Play, Edit3, Trash2, Loader2, ExternalLink, ChevronDown, ChevronUp,
+  Clock, Workflow, ToggleLeft, ToggleRight,
+} from 'lucide-react';
 import CronTaskForm from './CronTaskForm';
 import { describeCron } from './CronExpressionBuilder';
 import { useUIStore } from '../../stores/useUIStore';
@@ -46,7 +51,6 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
       setTask(found ?? null);
       const execs = await fetchCronExecutions(taskId);
       setExecutions(execs);
-      // Load sessions for jump-to-session feature
       const groups = await fetchSessions(undefined, true);
       setSessions(groups.flatMap(g => g.sessions));
     } catch (err) {
@@ -54,11 +58,9 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
     }
   }, [taskId]);
 
-  // When new executions appear while running, stop fast poll
   const prevExecCountRef = useRef(executions.length);
   useEffect(() => {
     if (running && executions.length > prevExecCountRef.current) {
-      // New execution appeared — stop fast poll after a short delay to let it settle
       if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; }
       setRunning(false);
     }
@@ -76,25 +78,22 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
 
   if (!taskId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-4">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto text-gray-600">
-              <rect x="3" y="3" width="7" height="5" rx="1" />
-              <rect x="14" y="16" width="7" height="5" rx="1" />
-              <path d="M10 5.5h2a2 2 0 0 1 2 2v7a2 2 0 0 0 2 2h-2" />
-              <polyline points="14 14.5 16 16.5 14 18.5" />
-            </svg>
-          </div>
-          <p className="text-lg">Select a workflow to view</p>
-          <p className="text-sm mt-1">Or create a new one from the left panel</p>
+          <Workflow className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+          <p className="text-lg text-muted-foreground">Select a workflow to view</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">Or create a new one from the left panel</p>
         </div>
       </div>
     );
   }
 
   if (!task) {
-    return <div className="p-6 text-gray-500">Loading...</div>;
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+      </div>
+    );
   }
 
   const handleToggle = async () => {
@@ -120,20 +119,16 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
     setRunning(true);
     try {
       await runCronTask(task.id);
-      // Poll every 2s for up to 30s until new execution appears, then revert to normal 5s
-      const prevCount = executions.length;
-      let elapsed = 0;
       if (fastPollRef.current) clearInterval(fastPollRef.current);
+      let elapsed = 0;
       fastPollRef.current = setInterval(async () => {
         elapsed += 2000;
         await loadTask();
-        // Stop fast polling once new execution appears or after 30s
         if (elapsed >= 30000) {
           if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; }
           setRunning(false);
         }
       }, 2000);
-      // Also do an immediate reload
       await loadTask();
     } catch (err) {
       console.error('Failed to run task:', err);
@@ -159,8 +154,8 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
 
   if (editing) {
     return (
-      <div className="px-4 py-3 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-200 mb-3">Edit Task</h2>
+      <div className="px-6 py-4 overflow-y-auto">
+        <h2 className="text-lg font-semibold text-foreground mb-4">Edit Task</h2>
         <CronTaskForm
           initial={task}
           onSubmit={handleUpdate}
@@ -173,87 +168,78 @@ export default function CronTaskDetail({ taskId, onTaskDeleted }: Props) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold text-gray-200">{task.name}</h2>
+      <div className="px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-foreground">{task.name}</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handleToggle}
-              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+              className={cn(
+                'text-xs px-3 py-1.5 rounded-lg transition-all font-medium flex items-center gap-1.5',
                 task.enabled
-                  ? 'bg-green-900/50 text-green-400 hover:bg-green-900/70'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
+                  ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+              )}
             >
-              {task.enabled ? 'Enabled' : 'Disabled'}
+              {task.enabled ? <><ToggleRight className="w-3.5 h-3.5" /> Enabled</> : <><ToggleLeft className="w-3.5 h-3.5" /> Disabled</>}
             </button>
             <button
               onClick={handleRun}
               disabled={running}
-              className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-1.5 font-medium shadow-sm shadow-primary/20"
             >
-              {running ? (
-                <>
-                  <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Starting...
-                </>
-              ) : 'Run Now'}
+              {running ? <><Loader2 className="w-3 h-3 animate-spin" /> Starting...</> : <><Play className="w-3 h-3" /> Run Now</>}
             </button>
             <button
               onClick={() => setEditing(true)}
-              className="text-xs px-3 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+              className="text-xs px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors flex items-center gap-1"
             >
-              Edit
+              <Edit3 className="w-3 h-3" /> Edit
             </button>
             <button
               onClick={handleDelete}
-              className="text-xs px-3 py-1.5 bg-red-900/50 text-red-400 rounded-lg hover:bg-red-900/70 transition-colors"
+              className="text-xs px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors flex items-center gap-1"
             >
-              Delete
+              <Trash2 className="w-3 h-3" /> Delete
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <span className="text-gray-500">Schedule:</span>{' '}
-            <span className="text-gray-300">{describeCron(task.cronExpression)}</span>
-            <span className="text-gray-600 font-mono text-xs ml-2">{task.cronExpression}</span>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-background/60 rounded-lg p-3 border border-border/50">
+            <span className="text-xs text-muted-foreground font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Schedule</span>
+            <div className="text-sm text-foreground mt-1">{describeCron(task.cronExpression)}</div>
+            <code className="text-xs text-muted-foreground/60 font-mono">{task.cronExpression}</code>
           </div>
           {task.projectPath && (
-            <div>
-              <span className="text-gray-500">Project:</span>{' '}
-              <span className="text-gray-300">{task.projectPath}</span>
+            <div className="bg-background/60 rounded-lg p-3 border border-border/50">
+              <span className="text-xs text-muted-foreground font-medium">Project</span>
+              <div className="text-sm text-foreground mt-1 truncate">{task.projectPath}</div>
             </div>
           )}
-          <div>
-            <span className="text-gray-500">Last run:</span>{' '}
-            <span className="text-gray-300">
-              {task.lastRun ? new Date(task.lastRun).toLocaleString() : 'Never'}
-            </span>
+          <div className="bg-background/60 rounded-lg p-3 border border-border/50">
+            <span className="text-xs text-muted-foreground font-medium">Last run</span>
+            <div className="text-sm text-foreground mt-1">{task.lastRun ? new Date(task.lastRun).toLocaleString() : 'Never'}</div>
           </div>
-          <div>
-            <span className="text-gray-500">Created:</span>{' '}
-            <span className="text-gray-300">
-              {new Date(task.createdAt).toLocaleString()}
-            </span>
+          <div className="bg-background/60 rounded-lg p-3 border border-border/50">
+            <span className="text-xs text-muted-foreground font-medium">Created</span>
+            <div className="text-sm text-foreground mt-1">{new Date(task.createdAt).toLocaleString()}</div>
           </div>
         </div>
-        <div className="mt-2">
-          <span className="text-gray-500 text-sm">Prompt:</span>
-          <pre className="mt-1 text-sm text-gray-300 bg-gray-800 rounded-lg p-2 whitespace-pre-wrap max-h-32 overflow-y-auto">
+
+        <div className="mt-3">
+          <span className="text-xs text-muted-foreground font-medium">Prompt</span>
+          <pre className="mt-1.5 text-sm text-secondary-foreground bg-background/60 rounded-lg p-3 whitespace-pre-wrap max-h-32 overflow-y-auto border border-border/50 font-mono">
             {task.prompt}
           </pre>
         </div>
       </div>
 
       {/* Execution History */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         <Collapsible title="Execution History" count={executions.length} defaultOpen storageKey="claudit:cronExecHistory">
           {executions.length === 0 ? (
-            <div className="text-gray-600 text-sm">No executions yet.</div>
+            <div className="text-muted-foreground text-sm text-center py-4">No executions yet.</div>
           ) : (
             <div className="space-y-2">
               {executions.map(exec => (
@@ -288,57 +274,54 @@ function ExecutionCard({ execution, sessions, onJumpToSession }: {
     : undefined;
 
   return (
-    <div className="border border-gray-800 rounded-lg overflow-hidden">
+    <div className="border border-border/50 rounded-lg overflow-hidden bg-card/50">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-gray-800/30 transition-colors"
+        className="w-full text-left px-3 py-2.5 flex items-center justify-between hover:bg-accent/30 transition-colors"
       >
         <div className="flex items-center gap-3">
           <StatusBadge status={execution.status} />
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-muted-foreground">
             {new Date(execution.startedAt).toLocaleString()}
           </span>
           {duration !== null && (
-            <span className="text-xs text-gray-600">{duration}s</span>
+            <span className="text-xs text-muted-foreground/60 flex items-center gap-1">
+              <Clock className="w-2.5 h-2.5" /> {duration}s
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2">
           {linkedSession && (
             <span
               onClick={(e) => { e.stopPropagation(); onJumpToSession(linkedSession); }}
-              className="text-xs px-2 py-0.5 bg-gray-700 text-claude rounded hover:bg-gray-600 transition-colors cursor-pointer flex items-center gap-1"
+              className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1 font-medium"
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-              Session
+              <ExternalLink className="w-3 h-3" /> Session
             </span>
           )}
-          <span className="text-gray-500 text-xs">{expanded ? '▲' : '▼'}</span>
+          {expanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
         </div>
       </button>
       {expanded && (
-        <div className="px-3 pb-2 border-t border-gray-800">
+        <div className="px-3 pb-3 border-t border-border/30 animate-fade-in">
           {execution.output && (
             <div className="mt-2">
-              <div className="text-xs text-gray-500 mb-1">Output:</div>
-              <pre className="text-xs text-gray-300 bg-gray-900 rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap">
+              <div className="text-xs text-muted-foreground mb-1 font-medium">Output:</div>
+              <pre className="text-xs text-secondary-foreground bg-background/60 rounded-lg p-2.5 max-h-40 overflow-auto whitespace-pre-wrap font-mono border border-border/50">
                 {execution.output}
               </pre>
             </div>
           )}
           {execution.error && (
             <div className="mt-2">
-              <div className="text-xs text-red-400 mb-1">Error:</div>
-              <pre className="text-xs text-red-300 bg-red-900/20 rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap">
+              <div className="text-xs text-destructive mb-1 font-medium">Error:</div>
+              <pre className="text-xs text-red-300 bg-destructive/5 rounded-lg p-2.5 max-h-40 overflow-auto whitespace-pre-wrap font-mono border border-destructive/20">
                 {execution.error}
               </pre>
             </div>
           )}
           {!execution.output && !execution.error && (
-            <div className="mt-2 text-xs text-gray-600">
+            <div className="mt-2 text-xs text-muted-foreground">
               {execution.status === 'running' ? 'Task is still running...' : 'No output.'}
             </div>
           )}

@@ -231,6 +231,63 @@ const migrations: Migration[] = [
     // Drop the todos table (groups table kept for task grouping)
     db.exec('DROP TABLE IF EXISTS todos;');
   },
+  // v4 → v5: mayor_messages table for Mayor communication log
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS mayor_messages (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL DEFAULT 'event',
+        source TEXT NOT NULL DEFAULT 'system',
+        subject TEXT,
+        body TEXT NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_mayor_messages_type ON mayor_messages(type);
+      CREATE INDEX IF NOT EXISTS idx_mayor_messages_read ON mayor_messages(read);
+    `);
+  },
+  // v5 → v6: isSystem column on agents + seed default agents
+  (db) => {
+    db.exec(`ALTER TABLE agents ADD COLUMN isSystem INTEGER NOT NULL DEFAULT 0;`);
+
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO agents (id, name, avatar, specialty, systemPrompt, isSystem, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+    `);
+
+    // Seed Default Agent
+    insert.run(
+      'default',
+      'Default',
+      '🤖',
+      'General purpose coding assistant',
+      `You are a general-purpose coding assistant for claudit.
+
+Complete the given task carefully and thoroughly.
+Work in the project directory provided.
+
+When you finish, output exactly:
+TASK_COMPLETE: <one sentence summary of what was done>
+
+If you cannot complete the task, output:
+TASK_FAILED: <reason why it could not be completed>
+
+For major milestones during work, output:
+CHECKPOINT: <what was just completed>`,
+    );
+
+    // Seed Mayor Agent (display only — actual runtime managed by mayorService)
+    insert.run(
+      'mayor',
+      'Mayor',
+      '🏛️',
+      'Orchestration & Planning',
+      `You are Mayor, the orchestrator of claudit.
+You have access to claudit tools via MCP. Use them to manage tasks and agents.
+Never write code yourself — always delegate to agents via spawn_session.`,
+    );
+  },
 ];
 
 function runMigrations() {

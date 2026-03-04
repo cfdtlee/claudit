@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, memo } from 'react';
 import { SessionSummary } from '../../types';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useUIStore } from '../../stores/useUIStore';
+import { cn } from '../../lib/utils';
+import { Pin, Crown, MoreHorizontal, Activity } from 'lucide-react';
 import SessionContextMenu from './SessionContextMenu';
 
 interface Props {
@@ -54,7 +56,6 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
   }, [editing]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Prevent text selection on shift/cmd+click
     if (e.shiftKey || e.metaKey || e.ctrlKey) {
       e.preventDefault();
     }
@@ -90,11 +91,8 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave();
-    } else if (e.key === 'Escape') {
-      setEditing(false);
-    }
+    if (e.key === 'Enter') handleSave();
+    else if (e.key === 'Escape') setEditing(false);
   };
 
   const handleAddTask = () => {
@@ -105,26 +103,18 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
 
   const displayText = session.displayName || session.lastMessage;
 
-  const statusEmoji = (() => {
-    switch (session.status) {
-      case 'running': return '\u{1F3C3}';
-      case 'done': return '\u{1F514}';
-      default: return null; // idle — no indicator
-    }
-  })();
-
   return (
     <div
-      className={`group relative w-full text-left border-b border-gray-800/50 transition-colors cursor-pointer
-        ${multiSelected ? 'bg-claude/10 border-l-2 border-l-claude' : ''}
-        ${isSelected && !multiSelected ? 'bg-claude/10 border-l-2 border-l-claude' : ''}
-        ${!isSelected && !multiSelected ? 'hover:bg-gray-800/50' : ''}`}
+      className={cn(
+        'group relative w-full text-left transition-all cursor-pointer',
+        (multiSelected || (isSelected && !multiSelected)) ? 'list-item-selected' : 'list-item-hover'
+      )}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
     >
-      <div className="px-4 py-2.5">
+      <div className="px-3 py-2.5">
         {editing ? (
           <input
             ref={inputRef}
@@ -133,38 +123,43 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
             onClick={e => e.stopPropagation()}
-            className="w-full text-sm bg-gray-800 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 outline-none focus:border-claude"
+            className="w-full text-sm bg-secondary text-foreground px-2 py-1 rounded-md border border-primary/30 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
           />
         ) : (
           <div className="flex items-center gap-2">
-            {statusEmoji && <span className="text-sm flex-shrink-0" title={session.status}>{statusEmoji}</span>}
+            {session.status === 'running' && (
+              <Activity className="w-3.5 h-3.5 text-blue-400 animate-pulse flex-shrink-0" />
+            )}
+            {session.status === 'done' && (
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+            )}
             {session.isMayor ? (
-              <span className="text-xs text-claude font-bold flex-shrink-0" title="Mayor">M</span>
+              <Crown className="w-3.5 h-3.5 text-primary flex-shrink-0" />
             ) : session.pinned ? (
-              <svg className="w-3 h-3 text-claude flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
-              </svg>
+              <Pin className="w-3 h-3 text-primary flex-shrink-0" />
             ) : null}
-            <div className="text-sm text-gray-300 truncate leading-snug flex-1">
+            <div className={cn(
+              'text-sm truncate leading-snug flex-1',
+              isSelected ? 'text-foreground' : 'text-secondary-foreground'
+            )}>
               {displayText}
             </div>
             <button
               onClick={e => {
                 e.stopPropagation();
                 if (multiSelected && onContextMenu) {
-                  // When multi-selected, delegate to batch context menu
                   onContextMenu(e, session.sessionId);
                 } else {
                   setShowMenu(!showMenu);
                 }
               }}
-              className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 transition-opacity px-1 text-sm flex-shrink-0"
+              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all px-0.5 flex-shrink-0"
             >
-              ...
+              <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
         )}
-        <div className="text-xs text-gray-500 mt-1 ml-4">
+        <div className="text-xs text-muted-foreground mt-1 ml-5">
           {formatTime(session.timestamp)}
         </div>
       </div>
@@ -184,11 +179,8 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
           onAddTask={handleAddTask}
           onArchive={() => {
             setShowMenu(false);
-            if (isArchived) {
-              unarchiveSession(session.sessionId);
-            } else {
-              archiveSession(session.sessionId);
-            }
+            if (isArchived) unarchiveSession(session.sessionId);
+            else archiveSession(session.sessionId);
           }}
           onDelete={() => {
             setShowMenu(false);

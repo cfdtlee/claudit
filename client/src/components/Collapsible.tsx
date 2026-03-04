@@ -1,4 +1,6 @@
 import { useState, ReactNode } from 'react';
+import { cn } from '../lib/utils';
+import { ChevronRight } from 'lucide-react';
 
 interface Props {
   title: string;
@@ -32,15 +34,18 @@ export default function Collapsible({ title, count, defaultOpen, storageKey, chi
     <div>
       <button
         onClick={toggle}
-        className="w-full flex items-center gap-1.5 text-sm font-semibold text-gray-400 hover:text-gray-300 transition-colors mb-2"
+        className="w-full flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors mb-2"
       >
-        <span className="text-xs text-gray-600">{open ? '▾' : '▸'}</span>
+        <ChevronRight className={cn(
+          'w-3.5 h-3.5 transition-transform duration-150',
+          open && 'rotate-90'
+        )} />
         <span>{title}</span>
         {count !== undefined && (
-          <span className="text-xs text-gray-600">({count})</span>
+          <span className="text-xs text-muted-foreground/50">({count})</span>
         )}
       </button>
-      {open && children}
+      {open && <div className="animate-fade-in">{children}</div>}
     </div>
   );
 }

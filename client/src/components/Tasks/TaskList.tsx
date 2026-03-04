@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Task, TaskStatus } from '../../types';
 import { fetchTasks, updateTask, reorderTasks } from '../../api/tasks';
+import { cn } from '../../lib/utils';
+import {
+  Search, X, Plus, Circle, CheckCircle2, Clock, AlertTriangle,
+  Loader2, FileText, Pause, Ban, Bell,
+} from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -24,31 +29,31 @@ interface Props {
 }
 
 const PRIORITY_COLORS: Record<number, string> = {
-  1: 'bg-gray-500',
-  2: 'bg-yellow-500',
-  3: 'bg-red-500',
+  1: 'bg-muted-foreground/40',
+  2: 'bg-amber-400',
+  3: 'bg-red-400',
 };
 
-const STATUS_ICONS: Record<TaskStatus, string> = {
-  pending: '\u25CB',
-  running: '\u25D4',
-  waiting: '\uD83D\uDD14',
-  draft: '\uD83D\uDCDD',
-  paused: '\u25D1',
-  done: '\u25CF',
-  failed: '\u2716',
-  cancelled: '\u2014',
+const STATUS_ICONS: Record<TaskStatus, React.ElementType> = {
+  pending: Circle,
+  running: Loader2,
+  waiting: Bell,
+  draft: FileText,
+  paused: Pause,
+  done: CheckCircle2,
+  failed: AlertTriangle,
+  cancelled: Ban,
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  pending: 'text-gray-400',
+  pending: 'text-muted-foreground',
   running: 'text-blue-400',
   waiting: 'text-red-400',
   draft: 'text-purple-400',
-  paused: 'text-yellow-400',
-  done: 'text-green-400',
+  paused: 'text-amber-400',
+  done: 'text-emerald-400',
   failed: 'text-red-400',
-  cancelled: 'text-gray-600',
+  cancelled: 'text-muted-foreground/50',
 };
 
 function getTimeAgo(iso: string): string {
@@ -72,7 +77,9 @@ interface TaskItemProps {
 const TaskItem = memo(function TaskItem({ task, selected, onSelect, onToggle }: TaskItemProps) {
   const isDone = task.status === 'done';
   const isWaiting = task.status === 'waiting';
+  const isRunning = task.status === 'running';
   const timeAgo = getTimeAgo(task.createdAt);
+  const StatusIcon = STATUS_ICONS[task.status] ?? Circle;
 
   const {
     attributes,
@@ -96,44 +103,45 @@ const TaskItem = memo(function TaskItem({ task, selected, onSelect, onToggle }: 
       {...attributes}
       {...listeners}
       onClick={onSelect}
-      className={`px-4 py-3 border-b cursor-pointer transition-colors flex items-start gap-3 ${
-        isWaiting
-          ? 'border-l-2 border-l-red-500 border-b-gray-800/50 bg-red-900/10'
-          : 'border-b-gray-800/50'
-      } ${
-        selected ? 'bg-gray-800' : 'hover:bg-gray-800/50'
-      }`}
+      className={cn(
+        'px-3 py-3 cursor-pointer transition-all flex items-start gap-3',
+        isWaiting && !selected && 'border-l-2 border-l-red-400 bg-red-500/5',
+        isRunning && !selected && 'border-l-2 border-l-blue-400 bg-blue-500/5',
+        selected ? 'list-item-selected' : 'list-item-hover'
+      )}
     >
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+        className={cn(
+          'mt-0.5 w-[18px] h-[18px] rounded-full flex-shrink-0 flex items-center justify-center transition-all',
           isDone
-            ? 'bg-claude border-claude'
-            : 'border-gray-500 hover:border-gray-300'
-        }`}
-      >
-        {isDone && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+            ? 'bg-primary text-primary-foreground'
+            : 'border border-muted-foreground/40 hover:border-primary/60'
         )}
+      >
+        {isDone && <CheckCircle2 className="w-3 h-3" />}
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_COLORS[task.priority ?? 2] ?? 'bg-gray-500'}`} />
-          <span className={`text-sm truncate ${
-            isDone ? 'text-gray-500 line-through' : 'text-gray-200'
-          }`}>
+          <span className={cn(
+            'w-1.5 h-1.5 rounded-full flex-shrink-0',
+            PRIORITY_COLORS[task.priority ?? 2] ?? 'bg-muted-foreground/40'
+          )} />
+          <span className={cn(
+            'text-sm truncate',
+            isDone ? 'text-muted-foreground line-through' : 'text-foreground'
+          )}>
             {task.title}
           </span>
-          {isWaiting && (
-            <span className={`text-sm ${STATUS_COLORS.waiting}`}>{STATUS_ICONS.waiting}</span>
-          )}
-          {task.status === 'running' && (
-            <span className={`text-xs ${STATUS_COLORS.running}`}>{STATUS_ICONS.running}</span>
+          {(isWaiting || isRunning) && (
+            <StatusIcon className={cn(
+              'w-3.5 h-3.5 flex-shrink-0',
+              STATUS_COLORS[task.status],
+              isRunning && 'animate-spin'
+            )} />
           )}
         </div>
-        <div className="text-xs text-gray-500 mt-1 ml-4">{timeAgo}</div>
+        <div className="text-xs text-muted-foreground mt-1 ml-3.5">{timeAgo}</div>
       </div>
     </div>
   );
@@ -170,7 +178,6 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
     return () => clearInterval(interval);
   }, [loadTasks]);
 
-  // Refresh when selection changes
   useEffect(() => {
     if (selectedTaskId) loadTasks();
   }, [selectedTaskId, loadTasks]);
@@ -211,7 +218,6 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
     const draggedTask = filteredList[oldIndex];
     const items = [{ id: draggedTask.id, order: newOrder }];
 
-    // Optimistic update
     setTasks(prev => {
       const updated = prev.map(t => t.id === draggedTask.id ? { ...t, order: newOrder } : t);
       return updated.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -235,7 +241,6 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
       }
       return true;
     }).sort((a, b) => {
-      // Waiting tasks first, then done last
       if (a.status === 'waiting' && b.status !== 'waiting') return -1;
       if (a.status !== 'waiting' && b.status === 'waiting') return 1;
       const aDone = a.status === 'done' || a.status === 'cancelled';
@@ -250,23 +255,21 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-200">Tasks</h2>
+      {/* Header */}
+      <div className="p-4 border-b border-border/50 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-foreground">Tasks</h2>
         <button
           onClick={() => onSelect('')}
-          className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors"
+          className="text-xs px-3 py-1.5 rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-sm shadow-primary/20 flex items-center gap-1"
         >
-          + New
+          <Plus className="w-3 h-3" /> New
         </button>
       </div>
 
       {/* Search */}
-      <div className="p-3 border-b border-gray-800">
+      <div className="px-3 py-2.5">
         <div className="relative">
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             data-search-input
@@ -274,9 +277,7 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
             value={localSearchQuery}
             onChange={e => {
               setLocalSearchQuery(e.target.value);
-              if (!composingRef.current) {
-                setSearchQuery(e.target.value);
-              }
+              if (!composingRef.current) setSearchQuery(e.target.value);
             }}
             onCompositionStart={() => { composingRef.current = true; }}
             onCompositionEnd={e => {
@@ -285,32 +286,33 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
               setLocalSearchQuery(val);
               setSearchQuery(val);
             }}
-            className="w-full pl-8 pr-7 py-2 rounded-md bg-gray-800 text-gray-200 text-sm
-                       placeholder-gray-500 border border-gray-700 focus:border-blue-500
-                       focus:outline-none transition-colors"
+            className="w-full pl-8 pr-7 py-2 rounded-lg bg-secondary/50 text-foreground text-sm
+                       placeholder-muted-foreground border border-border/50 focus:border-primary/50
+                       focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
           />
           {localSearchQuery && (
             <button
               onClick={() => { setLocalSearchQuery(''); setSearchQuery(''); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
-              &#x2715;
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
       {/* Filter pills */}
-      <div className="px-4 py-2 border-b border-gray-800 flex gap-1">
+      <div className="px-3 py-1.5 flex gap-1">
         {(['all', 'active', 'done'] as const).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`text-xs px-3 py-1 rounded-full capitalize transition-colors ${
+            className={cn(
+              'text-xs px-3 py-1 rounded-full capitalize transition-all font-medium',
               filter === f
-                ? 'bg-claude text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            }`}
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            )}
           >
             {f}{f === 'active' ? ` (${activeCount})` : ''}
           </button>
@@ -318,11 +320,13 @@ export default function TaskList({ selectedTaskId, onSelect }: Props) {
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 sidebar-scroll">
           {loading ? (
-            <div className="p-4 text-gray-500 text-sm">Loading...</div>
+            <div className="p-6 flex justify-center">
+              <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+            </div>
           ) : filtered.length === 0 ? (
-            <div className="p-4 text-gray-500 text-sm text-center">
+            <div className="p-6 text-muted-foreground text-sm text-center">
               {filter === 'all'
                 ? 'No tasks yet. Create one to get started.'
                 : filter === 'active'

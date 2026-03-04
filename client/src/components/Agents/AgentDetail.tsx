@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Agent } from '../../types';
 import { fetchAgent, updateAgent, deleteAgent } from '../../api/agents';
+import { cn } from '../../lib/utils';
+import { Edit3, Trash2, Save, X, Loader2, Clock, Bot, Code2, Shield } from 'lucide-react';
 
 interface Props {
   agentId: string | null;
@@ -41,14 +43,21 @@ export default function AgentDetail({ agentId, onAgentDeleted }: Props) {
 
   if (!agentId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
-        <p>Select an agent or create a new one</p>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <Bot className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+          <p className="text-muted-foreground">Select an agent or create a new one</p>
+        </div>
       </div>
     );
   }
 
   if (!agent) {
-    return <div className="flex-1 flex items-center justify-center text-gray-500">Loading...</div>;
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+      </div>
+    );
   }
 
   const handleSave = async () => {
@@ -76,16 +85,16 @@ export default function AgentDetail({ agentId, onAgentDeleted }: Props) {
     }
   };
 
-  const inputCls = 'w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-claude';
-  const labelCls = 'block text-xs text-gray-400 mb-1';
+  const inputCls = 'w-full px-3 py-2.5 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all';
+  const labelCls = 'block text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wider';
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-6 space-y-6">
+      <div className="max-w-2xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-claude to-purple-600 flex items-center justify-center text-white text-2xl font-medium">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-2xl font-semibold shadow-xl shadow-primary/20">
               {agent.avatar || agent.name[0].toUpperCase()}
             </div>
             <div>
@@ -97,30 +106,34 @@ export default function AgentDetail({ agentId, onAgentDeleted }: Props) {
                   className={inputCls}
                 />
               ) : (
-                <h2 className="text-xl font-semibold text-gray-100">{agent.name}</h2>
+                <h2 className="text-xl font-bold text-foreground">{agent.name}</h2>
               )}
               {!editing && agent.specialty && (
-                <p className="text-sm text-gray-400 mt-1">{agent.specialty}</p>
+                <p className="text-sm text-muted-foreground mt-1">{agent.specialty}</p>
               )}
             </div>
           </div>
-          <div className="flex gap-2">
-            {editing ? (
+          <div className="flex gap-2 items-center">
+            {agent.isSystem ? (
+              <span className="px-2.5 py-1 text-xs bg-primary/10 text-primary rounded-lg flex items-center gap-1 font-medium">
+                <Shield className="w-3 h-3" /> System
+              </span>
+            ) : editing ? (
               <>
-                <button onClick={handleSave} className="px-3 py-1.5 text-xs bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors">
-                  Save
+                <button onClick={handleSave} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium flex items-center gap-1">
+                  <Save className="w-3 h-3" /> Save
                 </button>
-                <button onClick={() => { setEditing(false); loadAgent(); }} className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors">
-                  Cancel
+                <button onClick={() => { setEditing(false); loadAgent(); }} className="px-3 py-1.5 text-xs bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors flex items-center gap-1">
+                  <X className="w-3 h-3" /> Cancel
                 </button>
               </>
             ) : (
               <>
-                <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors">
-                  Edit
+                <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-xs bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors flex items-center gap-1">
+                  <Edit3 className="w-3 h-3" /> Edit
                 </button>
-                <button onClick={handleDelete} className="px-3 py-1.5 text-xs bg-red-900/30 text-red-400 rounded-lg hover:bg-red-900/50 transition-colors">
-                  Delete
+                <button onClick={handleDelete} className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors flex items-center gap-1">
+                  <Trash2 className="w-3 h-3" /> Delete
                 </button>
               </>
             )}
@@ -128,7 +141,7 @@ export default function AgentDetail({ agentId, onAgentDeleted }: Props) {
         </div>
 
         {editing && (
-          <>
+          <div className="space-y-4">
             <div>
               <label className={labelCls}>Avatar (emoji or letter)</label>
               <input type="text" value={form.avatar} onChange={e => setForm(f => ({ ...f, avatar: e.target.value }))} placeholder="e.g. A or emoji" className={inputCls} />
@@ -137,21 +150,24 @@ export default function AgentDetail({ agentId, onAgentDeleted }: Props) {
               <label className={labelCls}>Specialty</label>
               <input type="text" value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))} placeholder="e.g. Frontend, Testing..." className={inputCls} />
             </div>
-          </>
+          </div>
         )}
 
         {/* System Prompt */}
-        <div>
-          <h3 className="text-sm font-medium text-gray-400 mb-2">System Prompt</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Code2 className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">System Prompt</h3>
+          </div>
           {editing ? (
             <textarea
               value={form.systemPrompt}
               onChange={e => setForm(f => ({ ...f, systemPrompt: e.target.value }))}
-              className={`${inputCls} min-h-[200px] resize-y font-mono`}
+              className={cn(inputCls, 'min-h-[200px] resize-y font-mono')}
               rows={8}
             />
           ) : (
-            <pre className="text-sm text-gray-300 whitespace-pre-wrap bg-gray-800/50 rounded-lg p-4 font-mono">
+            <pre className="text-sm text-secondary-foreground whitespace-pre-wrap bg-secondary/30 rounded-lg p-4 font-mono border border-border/30">
               {agent.systemPrompt || '(no system prompt)'}
             </pre>
           )}
@@ -159,26 +175,32 @@ export default function AgentDetail({ agentId, onAgentDeleted }: Props) {
 
         {/* Recent Summary */}
         {agent.recentSummary && (
-          <div>
-            <h3 className="text-sm font-medium text-gray-400 mb-2">Recent Summary</h3>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap bg-gray-800/50 rounded-lg p-4">{agent.recentSummary}</p>
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Recent Summary</h3>
+            <p className="text-sm text-secondary-foreground whitespace-pre-wrap bg-secondary/30 rounded-lg p-4 border border-border/30">{agent.recentSummary}</p>
           </div>
         )}
 
         {/* Meta */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <h3 className="text-xs text-gray-500 mb-1">Created</h3>
-            <p className="text-gray-300">{new Date(agent.createdAt).toLocaleString()}</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-secondary/20 rounded-lg p-3 border border-border/20">
+            <h3 className="text-xs text-muted-foreground mb-1 font-medium flex items-center gap-1">
+              <Clock className="w-3 h-3" /> Created
+            </h3>
+            <p className="text-sm text-foreground">{new Date(agent.createdAt).toLocaleString()}</p>
           </div>
-          <div>
-            <h3 className="text-xs text-gray-500 mb-1">Updated</h3>
-            <p className="text-gray-300">{new Date(agent.updatedAt).toLocaleString()}</p>
+          <div className="bg-secondary/20 rounded-lg p-3 border border-border/20">
+            <h3 className="text-xs text-muted-foreground mb-1 font-medium flex items-center gap-1">
+              <Clock className="w-3 h-3" /> Updated
+            </h3>
+            <p className="text-sm text-foreground">{new Date(agent.updatedAt).toLocaleString()}</p>
           </div>
           {agent.lastActiveAt && (
-            <div>
-              <h3 className="text-xs text-gray-500 mb-1">Last Active</h3>
-              <p className="text-gray-300">{new Date(agent.lastActiveAt).toLocaleString()}</p>
+            <div className="bg-secondary/20 rounded-lg p-3 border border-border/20">
+              <h3 className="text-xs text-muted-foreground mb-1 font-medium flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Last Active
+              </h3>
+              <p className="text-sm text-foreground">{new Date(agent.lastActiveAt).toLocaleString()}</p>
             </div>
           )}
         </div>

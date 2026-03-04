@@ -5,6 +5,12 @@ import { fetchAgents } from '../../api/agents';
 import { fetchProjects } from '../../api/projects';
 import { fetchSessions, createSession } from '../../api/sessions';
 import { useUIStore } from '../../stores/useUIStore';
+import { cn } from '../../lib/utils';
+import {
+  CheckCircle2, Edit3, Trash2, Play, Pause, RotateCcw, XCircle,
+  ExternalLink, Bell, Loader2, GitBranch, FileCode, Zap, Tag,
+  AlertTriangle, Clock, CircleCheck,
+} from 'lucide-react';
 import TaskForm from './TaskForm';
 import TaskEmptyState from './TaskEmptyState';
 import ClaudeItModal from './ClaudeItModal';
@@ -12,9 +18,9 @@ import { StatusBadge, StatusType } from '../StatusDot';
 import Collapsible from '../Collapsible';
 
 const PRIORITY_LABELS: Record<number, { text: string; className: string }> = {
-  1: { text: 'Low', className: 'bg-gray-700 text-gray-300' },
-  2: { text: 'Medium', className: 'bg-yellow-900/50 text-yellow-400' },
-  3: { text: 'High', className: 'bg-red-900/50 text-red-400' },
+  1: { text: 'Low', className: 'bg-secondary text-muted-foreground' },
+  2: { text: 'Medium', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
+  3: { text: 'High', className: 'bg-red-500/10 text-red-400 border border-red-500/20' },
 };
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -29,47 +35,47 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  pending: 'bg-gray-600',
-  running: 'bg-blue-600',
-  waiting: 'bg-red-600',
-  draft: 'bg-purple-600',
-  paused: 'bg-yellow-600',
-  done: 'bg-green-600',
-  failed: 'bg-red-600',
-  cancelled: 'bg-gray-700',
+  pending: 'bg-secondary text-secondary-foreground',
+  running: 'bg-blue-500/15 text-blue-400',
+  waiting: 'bg-red-500/15 text-red-400',
+  draft: 'bg-purple-500/15 text-purple-400',
+  paused: 'bg-amber-500/15 text-amber-400',
+  done: 'bg-emerald-500/15 text-emerald-400',
+  failed: 'bg-red-500/15 text-red-400',
+  cancelled: 'bg-secondary text-muted-foreground',
 };
 
-const TRANSITIONS: Record<TaskStatus, { label: string; status: TaskStatus; color: string }[]> = {
+const TRANSITIONS: Record<TaskStatus, { label: string; status: TaskStatus; icon: React.ElementType; variant: string }[]> = {
   pending: [
-    { label: 'Start', status: 'running', color: 'bg-blue-600 hover:bg-blue-700' },
-    { label: 'Cancel', status: 'cancelled', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Start', status: 'running', icon: Play, variant: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' },
+    { label: 'Cancel', status: 'cancelled', icon: XCircle, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
   running: [
-    { label: 'Pause', status: 'paused', color: 'bg-yellow-600 hover:bg-yellow-700' },
-    { label: 'Complete', status: 'done', color: 'bg-green-600 hover:bg-green-700' },
-    { label: 'Fail', status: 'failed', color: 'bg-red-600 hover:bg-red-700' },
+    { label: 'Pause', status: 'paused', icon: Pause, variant: 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20' },
+    { label: 'Complete', status: 'done', icon: CircleCheck, variant: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' },
+    { label: 'Fail', status: 'failed', icon: AlertTriangle, variant: 'bg-red-500/10 text-red-400 hover:bg-red-500/20' },
   ],
   waiting: [
-    { label: 'Resume', status: 'running', color: 'bg-blue-600 hover:bg-blue-700' },
-    { label: 'Cancel', status: 'cancelled', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Resume', status: 'running', icon: Play, variant: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' },
+    { label: 'Cancel', status: 'cancelled', icon: XCircle, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
   draft: [
-    { label: 'Approve', status: 'pending', color: 'bg-green-600 hover:bg-green-700' },
-    { label: 'Cancel', status: 'cancelled', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Approve', status: 'pending', icon: CircleCheck, variant: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' },
+    { label: 'Cancel', status: 'cancelled', icon: XCircle, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
   paused: [
-    { label: 'Resume', status: 'running', color: 'bg-blue-600 hover:bg-blue-700' },
-    { label: 'Cancel', status: 'cancelled', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Resume', status: 'running', icon: Play, variant: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' },
+    { label: 'Cancel', status: 'cancelled', icon: XCircle, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
   done: [
-    { label: 'Reopen', status: 'pending', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Reopen', status: 'pending', icon: RotateCcw, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
   failed: [
-    { label: 'Retry', status: 'pending', color: 'bg-blue-600 hover:bg-blue-700' },
-    { label: 'Cancel', status: 'cancelled', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Retry', status: 'pending', icon: RotateCcw, variant: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' },
+    { label: 'Cancel', status: 'cancelled', icon: XCircle, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
   cancelled: [
-    { label: 'Reopen', status: 'pending', color: 'bg-gray-600 hover:bg-gray-700' },
+    { label: 'Reopen', status: 'pending', icon: RotateCcw, variant: 'bg-secondary text-muted-foreground hover:bg-secondary/80' },
   ],
 };
 
@@ -128,7 +134,6 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
     }
   }, []);
 
-  // Clear edit mode when switching tasks
   useEffect(() => {
     if (editingTaskId && editingTaskId !== taskId) {
       setEditingTaskId(null);
@@ -145,7 +150,11 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
   }
 
   if (!task) {
-    return <div className="flex-1 flex items-center justify-center text-gray-500">Loading...</div>;
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+      </div>
+    );
   }
 
   const agentMap = new Map(agents.map(a => [a.id, a]));
@@ -224,9 +233,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
         sessionLabel: `Claudit: ${task.title}`,
       });
       setTask(prev => prev ? { ...prev, ...updated } : null);
-
       setPendingTaskPrompt({ sessionId: result.sessionId, prompt });
-
       selectSession(result.projectHash, result.sessionId, result.projectPath);
       setView('sessions');
     } catch (err: any) {
@@ -239,8 +246,8 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
 
   if (editing) {
     return (
-      <div className="px-4 py-3 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-200 mb-3">Edit Task</h2>
+      <div className="px-6 py-4 overflow-y-auto">
+        <h2 className="text-lg font-semibold text-foreground mb-4">Edit Task</h2>
         <TaskForm
           initial={task}
           sessions={sessions}
@@ -255,36 +262,34 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Waiting alert */}
       {task.status === 'waiting' && (
-        <div className="mx-4 mt-3 bg-red-900/30 border border-red-600/50 rounded-lg p-4 flex items-center gap-3">
-          <span className="text-2xl">&#128276;</span>
+        <div className="mx-4 mt-3 bg-red-500/5 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 animate-slide-in">
+          <Bell className="w-5 h-5 text-red-400 animate-pulse-soft" />
           <div>
             <div className="text-sm font-medium text-red-300">Waiting for human input</div>
-            <div className="text-xs text-red-400/70 mt-0.5">This task's agent needs your response to continue.</div>
+            <div className="text-xs text-red-400/60 mt-0.5">This task's agent needs your response to continue.</div>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800">
-        <div className="flex items-center justify-between mb-2">
+      <div className="px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <button
               onClick={handleToggle}
-              className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+              className={cn(
+                'w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center transition-all',
                 isDone
-                  ? 'bg-claude border-claude'
-                  : 'border-gray-500 hover:border-gray-300'
-              }`}
-            >
-              {isDone && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border-2 border-muted-foreground/30 hover:border-primary/60'
               )}
+            >
+              {isDone && <CheckCircle2 className="w-4 h-4" />}
             </button>
-            <h2 className={`text-lg font-semibold ${
-              isDone ? 'text-gray-500 line-through' : 'text-gray-200'
-            }`}>
+            <h2 className={cn(
+              'text-lg font-semibold',
+              isDone ? 'text-muted-foreground line-through' : 'text-foreground'
+            )}>
               {task.title}
             </h2>
           </div>
@@ -293,120 +298,104 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
               <button
                 onClick={() => setShowClaudeItModal(true)}
                 disabled={claudeItLoading}
-                className="text-xs px-3 py-1.5 bg-claude text-white rounded-lg hover:bg-claude-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-1.5 font-medium shadow-sm shadow-primary/20"
               >
                 {claudeItLoading ? (
-                  <>
-                    <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Creating...
-                  </>
+                  <><Loader2 className="w-3 h-3 animate-spin" /> Creating...</>
                 ) : (
-                  <>
-                    <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor">
-                      <polygon points="0,0 10,6 0,12" />
-                    </svg>
-                    Claudit
-                  </>
+                  <><Play className="w-3 h-3" /> Claudit</>
                 )}
               </button>
             )}
             <button
               onClick={() => setEditing(true)}
-              className="text-xs px-3 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+              className="text-xs px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors flex items-center gap-1"
             >
-              Edit
+              <Edit3 className="w-3 h-3" /> Edit
             </button>
             <button
               onClick={handleDelete}
-              className="text-xs px-3 py-1.5 bg-red-900/50 text-red-400 rounded-lg hover:bg-red-900/70 transition-colors"
+              className="text-xs px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors flex items-center gap-1"
             >
-              Delete
+              <Trash2 className="w-3 h-3" /> Delete
             </button>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-sm flex-wrap">
-          <span className={`px-2 py-0.5 rounded text-xs text-white ${STATUS_COLORS[task.status]}`}>
+          <span className={cn('px-2.5 py-0.5 rounded-md text-xs font-medium', STATUS_COLORS[task.status])}>
             {STATUS_LABELS[task.status]}
           </span>
-          <span className={`text-xs px-2 py-0.5 rounded ${priority.className}`}>
+          <span className={cn('text-xs px-2 py-0.5 rounded-md', priority.className)}>
             {priority.text}
           </span>
           {task.taskType && (
-            <span className="px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300">{task.taskType}</span>
+            <span className="px-2 py-0.5 rounded-md text-xs bg-secondary text-secondary-foreground">{task.taskType}</span>
           )}
           {task.tags?.map(tag => (
-            <span key={tag} className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400">
-              {tag}
+            <span key={tag} className="px-2 py-0.5 rounded-md text-xs bg-secondary/50 text-muted-foreground flex items-center gap-1">
+              <Tag className="w-2.5 h-2.5" /> {tag}
             </span>
           ))}
-          <div className="ml-auto">
-            <span className="text-gray-500">Created:</span>{' '}
-            <span className="text-gray-300">{new Date(task.createdAt).toLocaleString()}</span>
+          <div className="ml-auto flex items-center gap-1 text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            <span className="text-xs">{new Date(task.createdAt).toLocaleString()}</span>
           </div>
-          {task.completedAt && (
-            <div>
-              <span className="text-gray-500">Completed:</span>{' '}
-              <span className="text-gray-300">{new Date(task.completedAt).toLocaleString()}</span>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Status transitions */}
       {transitions.length > 0 && (
-        <div className="flex gap-2 px-4 py-2 border-b border-gray-800">
-          {transitions.map(t => (
-            <button
-              key={t.status}
-              onClick={() => handleStatusChange(t.status)}
-              className={`px-3 py-1.5 text-xs text-white rounded-lg transition-colors ${t.color}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex gap-2 px-6 py-3 border-b border-border/50">
+          {transitions.map(t => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.status}
+                onClick={() => handleStatusChange(t.status)}
+                className={cn('px-3 py-1.5 text-xs rounded-lg transition-all font-medium flex items-center gap-1.5', t.variant)}
+              >
+                <Icon className="w-3 h-3" /> {t.label}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {/* Description */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {task.description && (
           <Collapsible title="Description" defaultOpen storageKey={`claudit:task:${task.id}:desc`}>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap bg-gray-800 rounded-lg p-2">
+            <p className="text-sm text-secondary-foreground whitespace-pre-wrap bg-background/60 rounded-lg p-3 border border-border/50">
               {task.description}
             </p>
           </Collapsible>
         )}
 
-        {/* Prompt */}
         {task.prompt && (
           <Collapsible title="Prompt" defaultOpen storageKey={`claudit:task:${task.id}:prompt`}>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap bg-gray-800/50 rounded-lg p-4">{task.prompt}</p>
+            <p className="text-sm text-secondary-foreground whitespace-pre-wrap bg-background/60 rounded-lg p-4 border border-border/50 font-mono">{task.prompt}</p>
           </Collapsible>
         )}
 
-        {/* Error message */}
         {task.errorMessage && (
-          <div className="bg-red-900/20 border border-red-800/50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-red-400 mb-1">Error</h3>
+          <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-destructive mb-1 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5" /> Error
+            </h3>
             <p className="text-sm text-red-300">{task.errorMessage}</p>
           </div>
         )}
 
-        {/* Linked Session */}
         {task.sessionId && (() => {
           const linkedSession = sessions.find(s => s.sessionId === task.sessionId);
           return (
             <Collapsible title="Linked Session" defaultOpen storageKey={`claudit:task:${task.id}:session`}>
-              <div className="text-sm bg-gray-800 rounded-lg p-2 space-y-2">
+              <div className="text-sm bg-background/60 rounded-lg p-3 space-y-2 border border-border/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-gray-300 ${linkedSession ? 'cursor-pointer hover:text-claude transition-colors' : ''}`}
+                      className={cn('text-secondary-foreground', linkedSession && 'cursor-pointer hover:text-primary transition-colors')}
                       onClick={() => {
                         if (linkedSession) {
                           selectSession(linkedSession.projectHash, linkedSession.sessionId, linkedSession.projectPath);
@@ -416,7 +405,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
                     >
                       {task.sessionLabel || task.sessionId}
                     </span>
-                    <span className="text-gray-600 text-xs font-mono">{task.sessionId}</span>
+                    <code className="text-muted-foreground/50 text-xs font-mono">{task.sessionId.slice(0, 8)}</code>
                   </div>
                   {linkedSession && (
                     <button
@@ -424,14 +413,9 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
                         selectSession(linkedSession.projectHash, linkedSession.sessionId, linkedSession.projectPath);
                         setView('sessions');
                       }}
-                      className="text-xs px-2 py-1 bg-gray-700 text-claude rounded hover:bg-gray-600 transition-colors flex items-center gap-1"
+                      className="text-xs px-2.5 py-1 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors flex items-center gap-1 font-medium"
                     >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                        <polyline points="15 3 21 3 21 9" />
-                        <line x1="10" y1="14" x2="21" y2="3" />
-                      </svg>
-                      Jump to Session
+                      <ExternalLink className="w-3 h-3" /> Jump to Session
                     </button>
                   )}
                 </div>
@@ -439,7 +423,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
                   <div className="flex items-center gap-2">
                     <StatusBadge status={linkedSession.status as StatusType} />
                     {linkedSession.lastMessage && (
-                      <span className="text-xs text-gray-500 truncate ml-2">
+                      <span className="text-xs text-muted-foreground truncate ml-2">
                         {linkedSession.lastMessage.slice(0, 80)}{linkedSession.lastMessage.length > 80 ? '...' : ''}
                       </span>
                     )}
@@ -450,84 +434,79 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
           );
         })()}
 
-        {/* Meta info */}
         {(assignedAgent || assignedProject || task.branch || task.prUrl || task.tokenUsage != null) && (
           <div className="grid grid-cols-2 gap-4">
             {assignedAgent && (
-              <div>
-                <h3 className="text-xs text-gray-500 mb-1">Assignee</h3>
-                <p className="text-sm text-gray-300">{assignedAgent.name}</p>
+              <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <h3 className="text-xs text-muted-foreground mb-1 font-medium">Assignee</h3>
+                <p className="text-sm text-foreground">{assignedAgent.name}</p>
               </div>
             )}
             {assignedProject && (
-              <div>
-                <h3 className="text-xs text-gray-500 mb-1">Project</h3>
-                <p className="text-sm text-gray-300">{assignedProject.name}</p>
+              <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <h3 className="text-xs text-muted-foreground mb-1 font-medium">Project</h3>
+                <p className="text-sm text-foreground">{assignedProject.name}</p>
               </div>
             )}
             {task.branch && (
-              <div>
-                <h3 className="text-xs text-gray-500 mb-1">Branch</h3>
-                <p className="text-sm text-gray-300 font-mono">{task.branch}</p>
+              <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <h3 className="text-xs text-muted-foreground mb-1 font-medium flex items-center gap-1"><GitBranch className="w-3 h-3" /> Branch</h3>
+                <p className="text-sm text-foreground font-mono">{task.branch}</p>
               </div>
             )}
             {task.prUrl && (
-              <div>
-                <h3 className="text-xs text-gray-500 mb-1">PR</h3>
-                <a href={task.prUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline">{task.prUrl}</a>
+              <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <h3 className="text-xs text-muted-foreground mb-1 font-medium">PR</h3>
+                <a href={task.prUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">{task.prUrl}</a>
               </div>
             )}
             {task.tokenUsage != null && (
-              <div>
-                <h3 className="text-xs text-gray-500 mb-1">Token Usage</h3>
-                <p className="text-sm text-gray-300">{task.tokenUsage.toLocaleString()}</p>
+              <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <h3 className="text-xs text-muted-foreground mb-1 font-medium flex items-center gap-1"><Zap className="w-3 h-3" /> Token Usage</h3>
+                <p className="text-sm text-foreground">{task.tokenUsage.toLocaleString()}</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Result summary */}
         {task.resultSummary && (
           <Collapsible title="Result Summary" storageKey={`claudit:task:${task.id}:result`}>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap bg-gray-800/50 rounded-lg p-4">{task.resultSummary}</p>
+            <p className="text-sm text-secondary-foreground whitespace-pre-wrap bg-background/60 rounded-lg p-4 border border-border/50">{task.resultSummary}</p>
           </Collapsible>
         )}
 
-        {/* Acceptance criteria */}
         {task.acceptanceCriteria && (
           <Collapsible title="Acceptance Criteria" storageKey={`claudit:task:${task.id}:criteria`}>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap">{task.acceptanceCriteria}</p>
+            <p className="text-sm text-secondary-foreground whitespace-pre-wrap">{task.acceptanceCriteria}</p>
           </Collapsible>
         )}
 
-        {/* Subtasks */}
         {task.subtasks && task.subtasks.length > 0 && (
           <Collapsible title={`Subtasks (${task.subtasks.length})`} defaultOpen storageKey={`claudit:task:${task.id}:subs`}>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {task.subtasks.map(sub => (
-                <div key={sub.id} className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-lg">
-                  <span className={`text-xs ${STATUS_COLORS[sub.status]} px-1.5 py-0.5 rounded text-white`}>
+                <div key={sub.id} className="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg border border-border/50">
+                  <span className={cn('text-xs px-2 py-0.5 rounded-md font-medium', STATUS_COLORS[sub.status])}>
                     {STATUS_LABELS[sub.status]}
                   </span>
-                  <span className="text-sm text-gray-300">{sub.title}</span>
+                  <span className="text-sm text-foreground">{sub.title}</span>
                 </div>
               ))}
             </div>
           </Collapsible>
         )}
 
-        {/* Checkpoints */}
         {taskSessions.some(s => s.checkpoints && s.checkpoints.length > 0) && (
           <Collapsible title="Checkpoints" storageKey={`claudit:task:${task.id}:checkpoints`}>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {taskSessions.flatMap(s => (s.checkpoints ?? []).map((cp, i) => (
-                <div key={`${s.id}-cp-${i}`} className="flex items-start gap-3 px-3 py-2 bg-gray-800/50 rounded-lg">
-                  <div className="w-2 h-2 mt-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                <div key={`${s.id}-cp-${i}`} className="flex items-start gap-3 px-3 py-2 bg-background/50 rounded-lg border border-border/50">
+                  <div className="w-2 h-2 mt-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-300">{cp.step}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{new Date(cp.timestamp).toLocaleString()}</div>
+                    <div className="text-sm text-foreground">{cp.step}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{new Date(cp.timestamp).toLocaleString()}</div>
                     {cp.output && (
-                      <pre className="text-xs text-gray-400 mt-1 whitespace-pre-wrap font-mono">{cp.output}</pre>
+                      <pre className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap font-mono bg-background/50 rounded p-2">{cp.output}</pre>
                     )}
                   </div>
                 </div>
@@ -536,19 +515,18 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
           </Collapsible>
         )}
 
-        {/* Task Session history */}
         {taskSessions.length > 0 && (
           <Collapsible title={`Session History (${taskSessions.length})`} storageKey={`claudit:task:${task.id}:hist`}>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {taskSessions.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 bg-gray-800/50 rounded-lg text-sm">
+                <div key={s.id} className="flex items-center justify-between px-3 py-2 bg-background/60 rounded-lg text-sm border border-border/50">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-300 font-mono text-xs">{s.sessionId.slice(0, 8)}</span>
+                    <code className="text-foreground font-mono text-xs">{s.sessionId.slice(0, 8)}</code>
                     {s.agentId && agentMap.get(s.agentId) && (
-                      <span className="text-gray-500">{agentMap.get(s.agentId)!.name}</span>
+                      <span className="text-muted-foreground">{agentMap.get(s.agentId)!.name}</span>
                     )}
                   </div>
-                  <div className="text-gray-500 text-xs">
+                  <div className="text-muted-foreground text-xs">
                     {new Date(s.startedAt).toLocaleString()}
                     {s.tokenUsage != null && ` \u00B7 ${s.tokenUsage.toLocaleString()} tokens`}
                   </div>
@@ -558,20 +536,20 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated }: Pro
           </Collapsible>
         )}
 
-        {/* Files changed */}
         {task.filesChanged && task.filesChanged.length > 0 && (
           <Collapsible title={`Files Changed (${task.filesChanged.length})`} storageKey={`claudit:task:${task.id}:files`}>
-            <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="bg-background/60 rounded-lg p-3 border border-border/50">
               {task.filesChanged.map((f, i) => (
-                <div key={i} className="text-sm text-gray-300 font-mono py-0.5">{f}</div>
+                <div key={i} className="text-sm text-foreground font-mono py-0.5 flex items-center gap-1.5">
+                  <FileCode className="w-3 h-3 text-muted-foreground" /> {f}
+                </div>
               ))}
             </div>
           </Collapsible>
         )}
 
-        {/* Empty detail */}
         {!task.description && !task.prompt && !task.sessionId && !task.errorMessage && !task.resultSummary && (
-          <div className="text-gray-600 text-sm">No additional details.</div>
+          <div className="text-muted-foreground text-sm py-4 text-center">No additional details.</div>
         )}
       </div>
 

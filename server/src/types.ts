@@ -17,6 +17,7 @@ export type {
   ClauditConfig,
   Checkpoint,
   DashboardData,
+  MayorMessage,
 } from '../../shared/src/types.js';
 
 // Server-only types
