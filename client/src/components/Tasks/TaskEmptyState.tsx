@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SessionSummary } from '../../types';
+import { Project } from '../../types';
 import { createTask } from '../../api/tasks';
-import { fetchSessions } from '../../api/sessions';
+import { fetchProjects } from '../../api/projects';
 import { useUIStore } from '../../stores/useUIStore';
 import { cn } from '../../lib/utils';
-import { CheckSquare, Loader2, Send } from 'lucide-react';
+import { CheckSquare, Loader2, Plus, FolderOpen } from 'lucide-react';
+import FolderBrowser from '../FolderBrowser';
 
 interface Props {
   onTaskCreated: (id: string) => void;
@@ -26,16 +27,18 @@ export default function TaskEmptyState({ onTaskCreated }: Props) {
       return 'medium';
     }
   );
-  const [selectedSessionId, setSelectedSessionId] = useState(() => taskDraft?.selectedSessionId ?? '');
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [workingDir, setWorkingDir] = useState(() => taskDraft?.workingDir ?? '');
+  const [projectId, setProjectId] = useState(() => taskDraft?.projectId ?? '');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [showBrowser, setShowBrowser] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    fetchSessions(undefined, true)
-      .then(groups => setSessions(groups.flatMap(g => g.sessions)))
-      .catch(err => console.error('Failed to load sessions:', err));
+    fetchProjects()
+      .then(setProjects)
+      .catch(err => console.error('Failed to load projects:', err));
   }, []);
 
   useEffect(() => {
@@ -43,32 +46,29 @@ export default function TaskEmptyState({ onTaskCreated }: Props) {
   }, []);
 
   useEffect(() => {
-    if (title || description || priority !== 'medium' || selectedSessionId) {
-      setTaskDraft({ title, description, priority: PRIORITY_NUM[priority], selectedSessionId });
+    if (title || description || priority !== 'medium' || workingDir || projectId) {
+      setTaskDraft({ title, description, priority: PRIORITY_NUM[priority], workingDir: workingDir || undefined, projectId: projectId || undefined });
     }
-  }, [title, description, priority, selectedSessionId, setTaskDraft]);
+  }, [title, description, priority, workingDir, projectId, setTaskDraft]);
+
+  const handleProjectChange = (pid: string) => {
+    setProjectId(pid);
+    if (pid) {
+      const project = projects.find(p => p.id === pid);
+      if (project?.repoPath) setWorkingDir(project.repoPath);
+    }
+  };
 
   const handleSubmit = useCallback(async () => {
     if (!title.trim() || submitting) return;
     setSubmitting(true);
     try {
-      let sessionId: string | undefined;
-      let sessionLabel: string | undefined;
-      if (selectedSessionId) {
-        const session = sessions.find(s => s.sessionId === selectedSessionId);
-        if (session) {
-          sessionId = session.sessionId;
-          sessionLabel = session.displayName || session.lastMessage;
-        } else {
-          sessionId = selectedSessionId;
-        }
-      }
       const task = await createTask({
         title: title.trim(),
         description: description.trim() || undefined,
         priority: PRIORITY_NUM[priority],
-        sessionId,
-        sessionLabel,
+        workingDir: workingDir || undefined,
+        projectId: projectId || undefined,
       });
       setTaskDraft(null);
       onTaskCreated(task.id);
@@ -77,7 +77,7 @@ export default function TaskEmptyState({ onTaskCreated }: Props) {
     } finally {
       setSubmitting(false);
     }
-  }, [title, description, priority, selectedSessionId, sessions, submitting, onTaskCreated, setTaskDraft]);
+  }, [title, description, priority, workingDir, projectId, submitting, onTaskCreated, setTaskDraft]);
 
   const handleTitleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -87,7 +87,7 @@ export default function TaskEmptyState({ onTaskCreated }: Props) {
   };
 
   const handleDescKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !submitting) {
+    if (e.key === 'Enter' && e.metaKey && !submitting) {
       e.preventDefault();
       handleSubmit();
     }
@@ -167,38 +167,71 @@ export default function TaskEmptyState({ onTaskCreated }: Props) {
                 'disabled:opacity-30 bg-primary hover:bg-primary/90',
                 'shadow-sm shadow-primary/20'
               )}
-              title="Create task (Enter)"
+              title="Create task (⌘Enter)"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" />
               ) : (
-                <Send className="w-4 h-4 text-primary-foreground" />
+                <Plus className="w-4 h-4 text-primary-foreground" />
               )}
             </button>
           </div>
 
-          {/* Session link */}
+          {/* Project / Working Directory */}
           <div className="flex items-center gap-2 px-3 pb-2.5 border-t border-border pt-2.5">
             <select
-              value={selectedSessionId}
-              onChange={e => setSelectedSessionId(e.target.value)}
+              value={projectId}
+              onChange={e => handleProjectChange(e.target.value)}
               className="flex-1 text-xs text-muted-foreground bg-secondary/50 rounded-md px-2 py-1.5 border border-border outline-none focus:border-primary/50 transition-all"
             >
-              <option value="">No linked session</option>
-              {sessions.map(s => (
-                <option key={s.sessionId} value={s.sessionId}>
-                  {s.displayName || s.lastMessage || s.sessionId.slice(0, 8)}
-                </option>
+              <option value="">No project</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setShowBrowser(!showBrowser)}
+              className={cn(
+                'text-xs px-2 py-1.5 rounded-md flex items-center gap-1 transition-all border',
+                workingDir
+                  ? 'bg-primary/10 text-primary border-primary/20'
+                  : 'bg-secondary/50 text-muted-foreground border-border hover:text-foreground'
+              )}
+              title={workingDir || 'Browse for folder'}
+            >
+              <FolderOpen className="w-3 h-3" />
+              {workingDir ? workingDir.split('/').pop() : 'Browse'}
+            </button>
           </div>
+          {showBrowser && (
+            <div className="px-3 pb-2.5">
+              <FolderBrowser onPathChange={(path) => { setWorkingDir(path); }} />
+              <div className="flex justify-end mt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowBrowser(false)}
+                  className="text-xs px-2 py-1 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+          {workingDir && !showBrowser && (
+            <div className="flex items-center gap-1.5 px-3 pb-2">
+              <span className="text-[10px] text-muted-foreground/60 font-mono truncate" title={workingDir}>{workingDir}</span>
+              <button type="button" onClick={() => { setWorkingDir(''); setProjectId(''); }} className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground">✕</button>
+            </div>
+          )}
+
         </div>
       </div>
 
       <div className="mt-4 text-xs text-muted-foreground/50">
         <kbd className="px-1.5 py-0.5 bg-secondary rounded-md border border-border text-muted-foreground font-mono text-[10px]">Enter</kbd> next field
         <span className="mx-2 text-border">|</span>
-        <kbd className="px-1.5 py-0.5 bg-secondary rounded-md border border-border text-muted-foreground font-mono text-[10px]">Enter</kbd> in description to create
+        <kbd className="px-1.5 py-0.5 bg-secondary rounded-md border border-border text-muted-foreground font-mono text-[10px]">⌘ Enter</kbd> create
       </div>
     </div>
   );

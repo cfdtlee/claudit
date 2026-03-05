@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DashboardData } from '../../types';
+import { DashboardData, Project, Task } from '../../types';
 import { fetchDashboard } from '../../api/dashboard';
+import { fetchProjects, createProject } from '../../api/projects';
+import { fetchTasks } from '../../api/tasks';
 import { useUIStore } from '../../stores/useUIStore';
 import { cn } from '../../lib/utils';
 import {
@@ -19,7 +21,10 @@ import {
   Layers,
   ArrowUpRight,
   TrendingUp,
+  FolderOpen,
+  Plus,
 } from 'lucide-react';
+import FolderBrowser from '../FolderBrowser';
 
 function StatRing({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
@@ -48,6 +53,14 @@ function StatRing({ value, max, color }: { value: number; max: number; color: st
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [projectTaskCounts, setProjectTaskCounts] = useState<Record<string, number>>({});
+  const [showAddProject, setShowAddProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectPath, setNewProjectPath] = useState('');
+  const [addingProject, setAddingProject] = useState(false);
   const setView = useUIStore(s => s.setView);
 
   const load = useCallback(async () => {
@@ -66,6 +79,47 @@ export default function DashboardPage() {
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [load]);
+
+  const loadProjects = useCallback(() => {
+    fetchProjects().then(p => {
+      setProjects(p);
+      Promise.all(p.map(proj => fetchTasks({ projectId: proj.id }).then(tasks => ({ id: proj.id, count: tasks.length }))))
+        .then(counts => {
+          const map: Record<string, number> = {};
+          counts.forEach(c => { map[c.id] = c.count; });
+          setProjectTaskCounts(map);
+        });
+    }).catch(console.error);
+  }, []);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  const handleAddProject = async () => {
+    if (!newProjectName.trim() || !newProjectPath.trim() || addingProject) return;
+    setAddingProject(true);
+    try {
+      await createProject({ name: newProjectName.trim(), repoPath: newProjectPath.trim() });
+      setNewProjectName('');
+      setNewProjectPath('');
+      setShowAddProject(false);
+      loadProjects();
+    } catch (err) {
+      console.error('Failed to create project:', err);
+    } finally {
+      setAddingProject(false);
+    }
+  };
+
+  // Load filtered tasks when a project is selected
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setProjectTasks([]);
+      return;
+    }
+    fetchTasks({ projectId: selectedProjectId })
+      .then(tasks => setProjectTasks(tasks.slice(0, 10)))
+      .catch(console.error);
+  }, [selectedProjectId]);
 
   if (loading || !data) {
     return (
@@ -270,6 +324,156 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Project Folders */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Projects</span>
+            </div>
+            {projects.length > 0 && !showAddProject && (
+              <button
+                onClick={() => setShowAddProject(true)}
+                className="text-xs px-2 py-1 rounded-lg bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add
+              </button>
+            )}
+          </div>
+
+          {projects.length === 0 && !showAddProject ? (
+            <button
+              onClick={() => setShowAddProject(true)}
+              className="w-full rounded-2xl border border-dashed border-border hover:border-primary/30 bg-card/50 hover:bg-primary/5 p-8 transition-all group flex flex-col items-center gap-3"
+            >
+              <div className="w-12 h-12 rounded-xl bg-secondary/60 group-hover:bg-primary/15 flex items-center justify-center transition-colors">
+                <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+              <div>
+                <div className="text-sm font-medium text-foreground">Add your first project</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Link a repository to organize tasks by project</div>
+              </div>
+            </button>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {/* Add new project card */}
+              <button
+                onClick={() => setShowAddProject(true)}
+                className={cn(
+                  'rounded-2xl transition-all duration-200 overflow-hidden backdrop-blur-sm',
+                  'bg-white/[0.03] hover:bg-white/[0.07] border border-dashed border-white/[0.10] hover:border-primary/30',
+                  'flex flex-col items-center justify-center gap-2 min-h-[160px] group'
+                )}
+              >
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] group-hover:bg-primary/15 flex items-center justify-center">
+                  <Plus className="w-5 h-5 text-muted-foreground/50" />
+                </div>
+                <span className="text-[11px] text-muted-foreground/40 font-medium">New Project</span>
+              </button>
+              {projects.map(project => {
+                const isSelected = selectedProjectId === project.id;
+                const taskCount = projectTaskCounts[project.id] ?? 0;
+                const pathShort = project.repoPath.split('/').slice(-2).join('/');
+                return (
+                  <button
+                    key={project.id}
+                    onClick={() => setSelectedProjectId(isSelected ? null : project.id)}
+                    className={cn(
+                      'rounded-2xl text-left transition-all duration-200 overflow-hidden backdrop-blur-sm',
+                      isSelected
+                        ? 'bg-white/15 shadow-lg shadow-white/5 ring-1 ring-white/20'
+                        : 'bg-white/[0.06] hover:bg-white/[0.09] border border-white/[0.08] hover:border-white/[0.14]'
+                    )}
+                  >
+                    {/* Header — title + count badge */}
+                    <div className="flex items-start justify-between px-4 pt-3.5 pb-2">
+                      <div className="min-w-0 flex-1 mr-2">
+                        <div className="text-[13px] font-semibold text-foreground truncate">{project.name}</div>
+                        <div className="text-[10px] text-muted-foreground/50 mt-0.5">{pathShort}</div>
+                      </div>
+                      <span className={cn(
+                        'text-[11px] font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 tabular-nums',
+                        isSelected ? 'bg-white/20 text-white' : 'bg-white/[0.08] text-muted-foreground'
+                      )}>
+                        {taskCount}
+                      </span>
+                    </div>
+
+                    {/* Stacked cards area */}
+                    <div className="relative h-[90px] mx-3 mb-3">
+                      {/* Back card — rotated left, peeking from behind */}
+                      <div
+                        className={cn(
+                          'absolute inset-x-1 top-1 bottom-0 rounded-lg',
+                          isSelected ? 'bg-white/10' : 'bg-white/[0.04]'
+                        )}
+                        style={{ transform: 'rotate(-2deg) translateX(-4px)' }}
+                      />
+                      {/* Middle card — slight rotate */}
+                      <div
+                        className={cn(
+                          'absolute inset-x-0.5 top-0.5 bottom-0 rounded-lg',
+                          isSelected ? 'bg-white/15' : 'bg-white/[0.06]'
+                        )}
+                        style={{ transform: 'rotate(1deg) translateX(2px)' }}
+                      />
+                      {/* Front card — main visible card with content preview */}
+                      <div className={cn(
+                        'absolute inset-0 rounded-lg p-3 overflow-hidden',
+                        isSelected ? 'bg-white/20' : 'bg-white/[0.08]'
+                      )}>
+                        <div className={cn(
+                          'text-[10px] leading-relaxed line-clamp-4',
+                          isSelected ? 'text-white/50' : 'text-muted-foreground/30'
+                        )}>
+                          {project.description || `${taskCount} task${taskCount !== 1 ? 's' : ''} in ${project.name}`}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Inline add project form */}
+          {showAddProject && (
+            <div className="mt-3 rounded-xl border border-primary/20 bg-card p-4 space-y-3">
+              <input
+                type="text"
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                placeholder="Project name"
+                autoFocus
+                className="w-full bg-background/80 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary/50 transition-all"
+                onKeyDown={e => { if (e.key === 'Enter' && newProjectName && newProjectPath) handleAddProject(); }}
+              />
+              <FolderBrowser onPathChange={(path) => setNewProjectPath(path)} />
+              {newProjectPath && (
+                <div className="text-xs text-muted-foreground font-mono truncate" title={newProjectPath}>
+                  {newProjectPath}
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => { setShowAddProject(false); setNewProjectName(''); setNewProjectPath(''); }}
+                  className="text-xs px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddProject}
+                  disabled={!newProjectName.trim() || !newProjectPath.trim() || addingProject}
+                  className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 font-medium flex items-center gap-1.5"
+                >
+                  {addingProject ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  Create Project
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Row 2 — Active Agents + Recent Tasks */}
         <div className="grid grid-cols-12 gap-3">
           {/* Active Agents */}
@@ -326,7 +530,19 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">Recent Tasks</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {selectedProjectId
+                    ? `${projects.find(p => p.id === selectedProjectId)?.name ?? 'Project'} Tasks`
+                    : 'Recent Tasks'}
+                </span>
+                {selectedProjectId && (
+                  <button
+                    onClick={() => setSelectedProjectId(null)}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Show all
+                  </button>
+                )}
               </div>
               <button
                 onClick={() => setView('tasks')}
@@ -335,48 +551,54 @@ export default function DashboardPage() {
                 <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground" />
               </button>
             </div>
-            {data.recentTasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No tasks yet.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {data.recentTasks.map(task => {
-                  const statusStyle =
-                    task.status === 'running' ? 'bg-blue-500/15 text-blue-400' :
-                    task.status === 'waiting' ? 'bg-red-500/15 text-red-400' :
-                    task.status === 'done' ? 'bg-emerald-500/15 text-emerald-400' :
-                    task.status === 'failed' ? 'bg-red-500/15 text-red-400' :
-                    task.status === 'draft' ? 'bg-purple-500/15 text-purple-400' :
-                    'bg-secondary text-muted-foreground';
+            {(() => {
+              const displayTasks = selectedProjectId ? projectTasks : data.recentTasks;
+              if (displayTasks.length === 0) {
+                return <p className="text-sm text-muted-foreground py-8 text-center">
+                  {selectedProjectId ? 'No tasks in this project.' : 'No tasks yet.'}
+                </p>;
+              }
+              return (
+                <div className="space-y-1.5">
+                  {displayTasks.map(task => {
+                    const statusStyle =
+                      task.status === 'running' ? 'bg-blue-500/15 text-blue-400' :
+                      task.status === 'waiting' ? 'bg-red-500/15 text-red-400' :
+                      task.status === 'done' ? 'bg-emerald-500/15 text-emerald-400' :
+                      task.status === 'failed' ? 'bg-red-500/15 text-red-400' :
+                      task.status === 'draft' ? 'bg-purple-500/15 text-purple-400' :
+                      'bg-secondary text-muted-foreground';
 
-                  return (
-                    <div
-                      key={task.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group"
-                      onClick={() => {
-                        useUIStore.getState().setSelectedTaskId(task.id);
-                        setView('tasks');
-                      }}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={cn(
-                          'text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md flex-shrink-0',
-                          statusStyle
-                        )}>
-                          {task.status}
-                        </span>
-                        <span className="text-sm text-foreground truncate">{task.title}</span>
+                    return (
+                      <div
+                        key={task.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group"
+                        onClick={() => {
+                          useUIStore.getState().setSelectedTaskId(task.id);
+                          setView('tasks');
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={cn(
+                            'text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md flex-shrink-0',
+                            statusStyle
+                          )}>
+                            {task.status}
+                          </span>
+                          <span className="text-sm text-foreground truncate">{task.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(task.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/0 group-hover:text-muted-foreground transition-colors" />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                        <span className="text-[11px] text-muted-foreground">
-                          {new Date(task.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/0 group-hover:text-muted-foreground transition-colors" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

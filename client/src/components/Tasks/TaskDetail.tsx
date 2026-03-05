@@ -3,13 +3,14 @@ import { Task, TaskStatus, TaskSession, Agent, Project, SessionSummary } from '.
 import { fetchTask, updateTask, deleteTask, updateTaskStatus, fetchTaskSessions } from '../../api/tasks';
 import { fetchAgents } from '../../api/agents';
 import { fetchProjects } from '../../api/projects';
+import { onTaskUpdate } from '../../lib/events';
 import { fetchSessions, createSession } from '../../api/sessions';
 import { useUIStore } from '../../stores/useUIStore';
 import { cn } from '../../lib/utils';
 import {
   CheckCircle2, Edit3, Trash2, Play, Pause, RotateCcw, XCircle,
   ExternalLink, Bell, Loader2, GitBranch, FileCode, Zap, Tag,
-  AlertTriangle, Clock, CircleCheck,
+  AlertTriangle, Clock, CircleCheck, FolderOpen,
 } from 'lucide-react';
 import TaskForm from './TaskForm';
 import TaskEmptyState from './TaskEmptyState';
@@ -144,6 +145,8 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated, onTas
   useEffect(() => {
     loadTask();
     loadSessions();
+    const unsubscribe = onTaskUpdate(loadTask);
+    return () => unsubscribe();
   }, [loadTask, loadSessions]);
 
   if (!taskId) {
@@ -279,7 +282,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated, onTas
           <div className="flex items-center gap-2">
             {!task.sessionId && !isDone && task.status !== 'cancelled' && (
               <button
-                onClick={() => setShowClaudeItModal(true)}
+                onClick={() => task.workingDir ? handleClaudeIt(task.workingDir) : setShowClaudeItModal(true)}
                 disabled={claudeItLoading}
                 className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-1.5 font-medium shadow-sm shadow-primary/20"
               >
@@ -417,7 +420,7 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated, onTas
           );
         })()}
 
-        {(assignedAgent || assignedProject || task.branch || task.prUrl || task.tokenUsage != null) && (
+        {(assignedAgent || assignedProject || task.workingDir || task.branch || task.prUrl || task.tokenUsage != null) && (
           <div className="grid grid-cols-2 gap-4">
             {assignedAgent && (
               <div className="bg-background/50 rounded-lg p-3 border border-border/50">
@@ -429,6 +432,12 @@ export default function TaskDetail({ taskId, onTaskDeleted, onTaskCreated, onTas
               <div className="bg-background/50 rounded-lg p-3 border border-border/50">
                 <h3 className="text-xs text-muted-foreground mb-1 font-medium">Project</h3>
                 <p className="text-sm text-foreground">{assignedProject.name}</p>
+              </div>
+            )}
+            {task.workingDir && (
+              <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                <h3 className="text-xs text-muted-foreground mb-1 font-medium flex items-center gap-1"><FolderOpen className="w-3 h-3" /> Working Dir</h3>
+                <p className="text-sm text-foreground font-mono truncate" title={task.workingDir}>{task.workingDir}</p>
               </div>
             )}
             {task.branch && (

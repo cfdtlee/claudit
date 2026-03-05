@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Task, TaskStatus } from '../../types';
 import { fetchTasks, reorderTasks } from '../../api/tasks';
+import { onTaskUpdate } from '../../lib/events';
 import { cn } from '../../lib/utils';
 import {
   Search, X, Plus, Circle, CheckCircle2, Clock, AlertTriangle,
@@ -175,7 +176,8 @@ export default function TaskList({ selectedTaskId, onSelect, refreshTrigger }: P
   useEffect(() => {
     loadTasks();
     const interval = setInterval(loadTasks, 10000);
-    return () => clearInterval(interval);
+    const unsubscribe = onTaskUpdate(loadTasks);
+    return () => { clearInterval(interval); unsubscribe(); };
   }, [loadTasks]);
 
   useEffect(() => {

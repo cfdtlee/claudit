@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { Agent } from '../types.js';
 import { db } from './database.js';
 
-const stmtAll = db.prepare('SELECT * FROM agents ORDER BY createdAt DESC');
+const stmtAll = db.prepare('SELECT * FROM agents ORDER BY isSystem DESC, createdAt DESC');
 const stmtById = db.prepare('SELECT * FROM agents WHERE id = ?');
 const stmtInsert = db.prepare(`
   INSERT INTO agents (id, name, avatar, specialty, systemPrompt, recentSummary, isSystem, createdAt, updatedAt, lastActiveAt)

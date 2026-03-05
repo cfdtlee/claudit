@@ -87,6 +87,7 @@ export class ClaudeProcess extends EventEmitter {
 
       if (this.userMessageSent) {
         this.emit('done');
+        this.emit('process_exit', code);
       } else if (this.pendingMessage) {
         console.log('[claude] Process exited during resume, restarting for pending message...');
         const msg = this.pendingMessage;

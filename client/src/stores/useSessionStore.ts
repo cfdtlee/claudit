@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { emitTaskUpdate } from '../lib/events';
 import { ProjectGroup } from '../types';
 import {
   fetchSessions,
@@ -318,7 +319,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ _reconnectDelay: 1000 });
     };
 
-    ws.onmessage = () => {
+    ws.onmessage = (ev) => {
       // Debounce: collapse rapid events into one refresh
       const { _wsDebounceTimer } = get();
       if (_wsDebounceTimer) clearTimeout(_wsDebounceTimer);
@@ -328,6 +329,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         get().fetchArchived();
       }, 500);
       set({ _wsDebounceTimer: timer });
+
+      // Notify task components on task-related events
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type?.startsWith('task:') || data.type?.startsWith('agent:')) {
+          emitTaskUpdate();
+        }
+      } catch { /* ignore parse errors */ }
     };
 
     ws.onclose = () => {

@@ -19,6 +19,24 @@ const server = new McpServer({
   version: '0.2.0',
 });
 
+const SERVER_PORT = parseInt(process.env.PORT || '3001', 10);
+
+/** Call main server's internal API synchronously */
+async function serverCall(endpoint: string, body: Record<string, unknown>): Promise<{ ok: boolean; data?: any; error?: string }> {
+  try {
+    const res = await fetch(`http://localhost:${SERVER_PORT}/api/internal/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || `HTTP ${res.status}` };
+    return { ok: true, data };
+  } catch (err: any) {
+    return { ok: false, error: `Server unreachable: ${err.message}` };
+  }
+}
+
 // Helper to return text content
 function text(t: string) {
   return { content: [{ type: 'text' as const, text: t }] };
@@ -253,8 +271,6 @@ server.tool(
   async ({ taskId, agentId }) => {
     const task = getTask(taskId);
     if (!task) return errorResult(`Task not found: ${taskId}`);
-
-    // Guard: only allow spawning for pending tasks
     if (task.status !== 'pending') {
       return errorResult(`Task "${task.title}" has status '${task.status}' — only 'pending' tasks can be spawned. Do NOT retry.`);
     }
@@ -262,45 +278,24 @@ server.tool(
     const agent = getAgent(agentId);
     if (!agent) return errorResult(`Agent not found: ${agentId}`);
 
-    // Guard: check for recent pending spawn_request for the same task to prevent duplicates
-    const recentMessages = getAllMessages({ type: 'event', unreadOnly: true });
-    const hasPending = recentMessages.some(m =>
-      m.source === 'mayor' && m.subject === 'spawn_request' && m.body.includes(taskId)
-    );
-    if (hasPending) {
-      return errorResult(`A spawn request for task "${task.title}" is already pending. Do NOT retry — wait for the server to process it.`);
-    }
+    const res = await serverCall('spawn', { taskId, agentId });
+    if (!res.ok) return errorResult(`Spawn failed: ${res.error}`);
 
-    // Mark task as running immediately to prevent duplicate spawns
-    updateTask(taskId, { status: 'running', assignee: agentId });
-
-    // Create a spawn request message that the server will process
-    createMessage({
-      type: 'event',
-      source: 'mayor',
-      subject: `spawn_request`,
-      body: JSON.stringify({ taskId, agentId }),
-    });
-
-    return text(`Spawn request created for task "${task.title}" with agent "${agent.name}". The session will be started by the server. Do NOT call spawn_session again for this task — check get_messages() for status updates.`);
+    return text(`Spawned session ${res.data.sessionId} for task "${task.title}" with agent "${agent.name}".`);
   },
 );
 
 // --- kill_session ---
 server.tool(
   'kill_session',
-  'Request to stop a running agent session.',
+  'Stop a running agent session.',
   {
     sessionId: z.string().describe('The Claude session ID to stop'),
   },
   async ({ sessionId }) => {
-    createMessage({
-      type: 'event',
-      source: 'mayor',
-      subject: 'kill_request',
-      body: JSON.stringify({ sessionId }),
-    });
-    return text(`Kill request created for session ${sessionId}. The server will process it.`);
+    const res = await serverCall('kill', { sessionId });
+    if (!res.ok) return errorResult(`Kill failed: ${res.error}`);
+    return text(res.data.ok ? `Session ${sessionId} stopped.` : `Session ${sessionId} not found or already stopped.`);
   },
 );
 
@@ -313,13 +308,9 @@ server.tool(
     message: z.string().describe('The message content to send'),
   },
   async ({ agentId, message }) => {
-    createMessage({
-      type: 'event',
-      source: 'mayor',
-      subject: 'send_to_agent',
-      body: JSON.stringify({ agentId, message }),
-    });
-    return text(`Message queued for agent ${agentId}.`);
+    const res = await serverCall('send', { agentId, message });
+    if (!res.ok) return errorResult(`Send failed: ${res.error}`);
+    return text(res.data.ok ? `Message sent to agent ${agentId}.` : `Agent ${agentId} has no active session.`);
   },
 );
 

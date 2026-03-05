@@ -28,7 +28,9 @@ export interface TaskDraft {
   title: string;
   description: string;
   priority: number;
-  selectedSessionId: string;
+  selectedSessionId?: string;
+  workingDir?: string;
+  projectId?: string;
 }
 
 export interface CronDraft {

@@ -1,6 +1,6 @@
 {
   "name": "claudit",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "A web dashboard for managing Claude Code sessions, cron tasks, and todos",
   "license": "MIT",

@@ -34,6 +34,11 @@ if (cmd === 'open') {
   process.exit(0);
 }
 
+if (cmd === 'doctor') {
+  await import('./doctor.js');
+  process.exit(0);
+}
+
 if (cmd === 'service') {
   const sub = process.argv[3];
   if (sub === 'install') {
@@ -68,6 +73,7 @@ Commands:
   stop [--force]      Stop background daemon (blocked if sessions active)
   status              Show daemon status
   open                Open dashboard in browser
+  doctor              Check system health and diagnose issues
   service install     Install as boot service (launchd/systemd)
   service uninstall   Uninstall boot service
 

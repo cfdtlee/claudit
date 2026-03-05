@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -29,7 +29,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/sessions/new — create a fresh claude session
-router.post('/new', (req, res) => {
+router.post('/new', async (req, res) => {
   try {
     const { projectPath, worktree, displayName, initialPrompt, model, permissionMode } = req.body;
     if (!projectPath || typeof projectPath !== 'string') {
@@ -69,14 +69,10 @@ router.post('/new', (req, res) => {
       actualProjectPath = worktreePath;
     }
 
-    // Run claude with the initial prompt to create a session
-    const prompt = (typeof initialPrompt === 'string' && initialPrompt.trim())
-      ? initialPrompt.trim()
-      : 'hello';
+    // Create a minimal session — just get the session_id, don't wait for a full response
     const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'));
-    const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-    // Build CLI flags
+    // Build CLI flags — use --max-turns 1 with a trivial prompt to get session_id fast
     const cliFlags: string[] = ['-p', '--output-format', 'json', '--max-turns', '1'];
     if (model && typeof model === 'string') {
       cliFlags.push('--model', model);
@@ -87,21 +83,70 @@ router.post('/new', (req, res) => {
       cliFlags.push('--dangerously-skip-permissions');
     }
 
-    let result: string;
+    let sessionId: string | undefined;
     try {
-      result = execSync(
-        `${CLAUDE_BIN} ${cliFlags.join(' ')} '${escapedPrompt}'`,
-        { cwd: actualProjectPath, encoding: 'utf-8', timeout: 60_000, env: cleanEnv },
-      );
+      // Use spawn instead of execSync to stream output and extract session_id ASAP
+      sessionId = await new Promise<string>((resolve, reject) => {
+        const proc = spawn(CLAUDE_BIN, cliFlags, {
+          cwd: actualProjectPath,
+          env: cleanEnv,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        proc.stdout.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString();
+          // Try to extract session_id from partial output
+          for (const line of stdout.split('\n')) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.session_id) {
+                proc.kill();
+                resolve(parsed.session_id);
+                return;
+              }
+            } catch { /* not complete JSON yet */ }
+          }
+        });
+
+        proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+        const timer = setTimeout(() => {
+          proc.kill('SIGKILL');
+          reject(new Error('Session creation timed out after 60s'));
+        }, 60_000);
+
+        proc.on('close', (code) => {
+          clearTimeout(timer);
+          // Final attempt to parse session_id
+          for (const line of stdout.split('\n')) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.session_id) {
+                resolve(parsed.session_id);
+                return;
+              }
+            } catch { /* skip */ }
+          }
+          reject(new Error(`Failed to get session_id (exit=${code}): ${(stderr || stdout).slice(0, 200)}`));
+        });
+
+        proc.on('error', (err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+
+        // Send a trivial prompt to minimize Claude response time
+        proc.stdin.write('hi');
+        proc.stdin.end();
+      });
     } catch (e: any) {
-      console.error(`[session] Claude CLI failed:`, e.stderr || e.stdout || e.message);
-      res.status(500).json({ error: `Failed to create session: ${e.stderr || e.message}` });
+      console.error(`[session] Claude CLI failed:`, e.message);
+      res.status(500).json({ error: `Failed to create session: ${e.message}` });
       return;
     }
-
-    // Parse the JSON result to get the session ID
-    const parsed = JSON.parse(result);
-    const sessionId = parsed.session_id;
     if (!sessionId) {
       res.status(500).json({ error: 'Failed to get session ID from claude output' });
       return;

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Task, SessionSummary } from '../../types';
+import { Task, SessionSummary, Project } from '../../types';
+import { fetchProjects } from '../../api/projects';
 import { cn } from '../../lib/utils';
-import { Save, X } from 'lucide-react';
+import { Save, X, FolderOpen } from 'lucide-react';
+import FolderBrowser from '../FolderBrowser';
 
 const PRIORITY_MAP: Record<number, string> = { 1: 'low', 2: 'medium', 3: 'high' };
 const PRIORITY_NUM: Record<string, number> = { low: 1, medium: 2, high: 3 };
@@ -22,6 +24,10 @@ export default function TaskForm({ initial, sessions, prefillSessionId, onSubmit
     PRIORITY_MAP[initial?.priority ?? 2] ?? 'medium'
   );
   const [selectedSessionId, setSelectedSessionId] = useState(initial?.sessionId ?? prefillSessionId ?? '');
+  const [workingDir, setWorkingDir] = useState(initial?.workingDir ?? '');
+  const [projectId, setProjectId] = useState(initial?.projectId ?? '');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [showBrowser, setShowBrowser] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const autoResize = useCallback(() => {
@@ -33,6 +39,18 @@ export default function TaskForm({ initial, sessions, prefillSessionId, onSubmit
   }, []);
 
   useEffect(() => { autoResize(); }, [autoResize]);
+
+  useEffect(() => {
+    fetchProjects().then(setProjects).catch(console.error);
+  }, []);
+
+  const handleProjectChange = (pid: string) => {
+    setProjectId(pid);
+    if (pid) {
+      const project = projects.find(p => p.id === pid);
+      if (project?.repoPath) setWorkingDir(project.repoPath);
+    }
+  };
 
   useEffect(() => {
     if (prefillSessionId) setSelectedSessionId(prefillSessionId);
@@ -81,6 +99,8 @@ export default function TaskForm({ initial, sessions, prefillSessionId, onSubmit
       priority: PRIORITY_NUM[priority],
       sessionId,
       sessionLabel,
+      workingDir: workingDir || undefined,
+      projectId: projectId || undefined,
     });
   };
 
@@ -133,6 +153,55 @@ export default function TaskForm({ initial, sessions, prefillSessionId, onSubmit
             </button>
           ))}
         </div>
+      </div>
+
+      <div>
+        <label className={labelCls}>Project / Working Directory</label>
+        <div className="flex gap-2">
+          <select
+            value={projectId}
+            onChange={e => handleProjectChange(e.target.value)}
+            className={cn(inputCls, 'flex-1')}
+          >
+            <option value="">(No project)</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowBrowser(!showBrowser)}
+            className={cn(
+              'text-xs px-3 py-2.5 rounded-lg flex items-center gap-1.5 transition-all border whitespace-nowrap',
+              workingDir
+                ? 'bg-primary/10 text-primary border-primary/20'
+                : 'bg-background/80 text-muted-foreground border-border hover:text-foreground'
+            )}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            Browse
+          </button>
+        </div>
+        {showBrowser && (
+          <div className="mt-2">
+            <FolderBrowser onPathChange={(path) => { setWorkingDir(path); }} />
+            <div className="flex justify-end mt-1">
+              <button
+                type="button"
+                onClick={() => setShowBrowser(false)}
+                className="text-xs px-2 py-1 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+        {workingDir && !showBrowser && (
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-xs text-muted-foreground font-mono truncate" title={workingDir}>{workingDir}</span>
+            <button type="button" onClick={() => { setWorkingDir(''); setProjectId(''); }} className="text-xs text-muted-foreground/50 hover:text-muted-foreground">✕</button>
+          </div>
+        )}
       </div>
 
       <div>

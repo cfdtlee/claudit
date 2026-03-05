@@ -29,7 +29,7 @@ import { updateTask, getTask, getAllTasks } from './services/taskStorage.js';
 import { getAgent } from './services/agentStorage.js';
 import { getSetting, getSettingsObject } from './services/settingsStorage.js';
 import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions } from './services/sessionManager.js';
-import { getAllMessages, markMessageRead, createMessage } from './services/messageStorage.js';
+import { createMessage } from './services/messageStorage.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -52,6 +52,35 @@ app.use('/api/groups', groupRoutes);
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Internal API for MCP tools (same-machine HTTP calls instead of DB polling)
+app.post('/api/internal/spawn', async (req, res) => {
+  const { taskId, agentId } = req.body;
+  if (!taskId || !agentId) return res.status(400).json({ error: 'taskId and agentId required' });
+  try {
+    const task = getTask(taskId);
+    const agent = getAgent(agentId);
+    broadcastEvent({ type: 'notification', level: 'info', title: `${agent?.name ?? 'Agent'} spawning…`, message: `"${task?.title ?? taskId}"` });
+    const { sessionId } = await spawnAgentSession(taskId, agentId);
+    res.json({ sessionId });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/internal/kill', (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  const ok = killAgentSession(sessionId);
+  res.json({ ok });
+});
+
+app.post('/api/internal/send', (req, res) => {
+  const { agentId, message } = req.body;
+  if (!agentId || !message) return res.status(400).json({ error: 'agentId and message required' });
+  const ok = sendToAgent(agentId, message);
+  res.json({ ok });
 });
 
 // Production mode: serve client static files
@@ -198,22 +227,22 @@ wss.on('connection', (ws: WebSocket) => {
   });
 });
 
+// Broadcast to all connected /ws/events clients
+function broadcastEvent(event: object) {
+  const msg = JSON.stringify(event);
+  for (const client of wssEvents.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(msg);
+    }
+  }
+}
+
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   initScheduler();
   startWitness();
 
   // Mayor is disabled by default — user must start it manually from the dashboard
-
-  // Broadcast to all connected /ws/events clients
-  function broadcastEvent(event: object) {
-    const msg = JSON.stringify(event);
-    for (const client of wssEvents.clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(msg);
-      }
-    }
-  }
 
   // Listen for witness events — only restart Mayor if enabled
   witnessEmitter.on('mayorCheck', async (_sessionId: string) => {
@@ -275,52 +304,6 @@ server.listen(PORT, () => {
     broadcastEvent(event);
   });
 
-  // Poll for Mayor spawn/kill/send requests from MCP tools
-  setInterval(() => {
-    try {
-      const messages = getAllMessages({ type: 'event', unreadOnly: true });
-      for (const msg of messages) {
-        if (msg.source !== 'mayor') continue;
-
-        if (msg.subject === 'spawn_request') {
-          markMessageRead(msg.id);
-          try {
-            const { taskId, agentId } = JSON.parse(msg.body);
-            const task = getTask(taskId);
-            const agent = getAgent(agentId);
-            spawnAgentSession(taskId, agentId).then(({ sessionId }) => {
-              console.log(`[server] Spawned agent session: ${sessionId}`);
-              broadcastEvent({ type: 'notification', level: 'info', title: `${agent?.name ?? 'Agent'} started`, message: `"${task?.title ?? taskId}"` });
-            }).catch((err) => {
-              console.error(`[server] Failed to spawn agent session:`, err);
-              broadcastEvent({ type: 'notification', level: 'error', title: 'Agent spawn failed', message: `${err.message || 'Unknown error'}`, duration: 15000 });
-            });
-          } catch (err) {
-            console.error('[server] Failed to parse spawn request:', err);
-          }
-        } else if (msg.subject === 'kill_request') {
-          markMessageRead(msg.id);
-          try {
-            const { sessionId } = JSON.parse(msg.body);
-            killAgentSession(sessionId);
-          } catch (err) {
-            console.error('[server] Failed to parse kill request:', err);
-          }
-        } else if (msg.subject === 'send_to_agent') {
-          markMessageRead(msg.id);
-          try {
-            const { agentId, message } = JSON.parse(msg.body);
-            sendToAgent(agentId, message);
-          } catch (err) {
-            console.error('[server] Failed to parse send_to_agent request:', err);
-          }
-        }
-      }
-    } catch (err) {
-      // Silently ignore polling errors
-    }
-  }, 2000);
-
   // Mayor Patrol: periodically check for pending tasks and notify Mayor
   const PATROL_INTERVAL = getSettingsObject().patrolIntervalMs ?? 300000;
   let patrolTimer = setInterval(() => {
@@ -329,10 +312,10 @@ server.listen(PORT, () => {
       if (pendingTasks.length === 0) return;
 
       const summary = pendingTasks.map(t =>
-        `- [${t.id.slice(0, 8)}] "${t.title}" assignee=${t.assignee ?? 'unassigned'}`
+        `- ${t.id} "${t.title}" assignee=${t.assignee ?? 'unassigned'}`
       ).join('\n');
 
-      const patrolMsg = `Patrol check: ${pendingTasks.length} pending task(s) found.\n${summary}\n\nPlease use get_tasks() to review and assign/spawn them as needed.`;
+      const patrolMsg = `Patrol check: ${pendingTasks.length} pending task(s) found.\n${summary}\n\nFollow your Patrol Response Procedure: get_tasks(status="pending") → get_agents() → match → spawn.`;
       createMessage({
         type: 'event',
         source: 'patrol',

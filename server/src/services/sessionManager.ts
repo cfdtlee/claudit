@@ -4,6 +4,7 @@ import { ClaudeProcess, CLAUDE_BIN } from './claudeProcess.js';
 import { CompletionDetector } from './completionDetector.js';
 import { getTask, updateTask, updateTaskStatus } from './taskStorage.js';
 import { getAgent } from './agentStorage.js';
+import { getProject } from './projectStorage.js';
 import { createTaskSession, updateTaskSession } from './taskSessionStorage.js';
 import { createMessage } from './messageStorage.js';
 import { eventBus } from './eventBus.js';
@@ -23,7 +24,7 @@ const activeSessions = new Map<string, AgentSession>();
 /**
  * Create a new Claude session via `claude -p` and return the session_id.
  */
-function createAgentClaudeSession(agentSystemPrompt: string): Promise<string> {
+function createAgentClaudeSession(agentSystemPrompt: string, cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const cleanEnv = Object.fromEntries(
       Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
@@ -36,7 +37,7 @@ function createAgentClaudeSession(agentSystemPrompt: string): Promise<string> {
     }
 
     const proc = spawn(CLAUDE_BIN, args, {
-      cwd: os.homedir(),
+      cwd,
       env: cleanEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -96,9 +97,17 @@ export async function spawnAgentSession(taskId: string, agentId: string): Promis
   const agent = getAgent(agentId);
   if (!agent) throw new Error(`Agent not found: ${agentId}`);
 
-  // Create a new Claude session
-  const claudeSessionId = await createAgentClaudeSession(agent.systemPrompt);
-  console.log(`[sessionManager] Created Claude session ${claudeSessionId} for task ${taskId} agent ${agentId}`);
+  // Resolve working directory: task.workingDir > project.repoPath > homedir
+  let cwd = task.workingDir;
+  if (!cwd && task.projectId) {
+    const project = getProject(task.projectId);
+    if (project?.repoPath) cwd = project.repoPath;
+  }
+  if (!cwd) cwd = os.homedir();
+
+  // Create a new Claude session in the correct working directory
+  const claudeSessionId = await createAgentClaudeSession(agent.systemPrompt, cwd);
+  console.log(`[sessionManager] Created Claude session ${claudeSessionId} for task ${taskId} agent ${agentId} cwd=${cwd}`);
 
   // Create a TaskSession record
   const taskSession = createTaskSession({
@@ -114,7 +123,8 @@ export async function spawnAgentSession(taskId: string, agentId: string): Promis
   // Build the ClaudeProcess for the session
   const mcpConfigPath = getMcpConfigPath();
   const extraArgs = mcpConfigPath ? ['--mcp-config', mcpConfigPath] : [];
-  const claudeProcess = new ClaudeProcess(claudeSessionId, task.workingDir || os.homedir(), extraArgs);
+
+  const claudeProcess = new ClaudeProcess(claudeSessionId, cwd, extraArgs);
 
   // Set up completion detector
   const detector = new CompletionDetector(claudeProcess, taskId, taskSession.id);
@@ -165,13 +175,26 @@ export async function spawnAgentSession(taskId: string, agentId: string): Promis
     eventBus.emitEvent({ type: 'notification', level: 'error', title: 'Task failed', message: `"${task.title}" — ${reason}`, duration: 15000 });
   });
 
-  // Handle process done without explicit completion signal
-  claudeProcess.on('done', () => {
+  // Handle process exit without explicit completion signal
+  // Note: 'process_exit' only fires when the CLI process actually exits,
+  // unlike 'done' which fires after each turn's result event.
+  claudeProcess.on('process_exit', () => {
     if (activeSessions.has(claudeSessionId)) {
-      console.log(`[sessionManager] Process done for session ${claudeSessionId} (no explicit completion signal)`);
+      console.log(`[sessionManager] Process exited for session ${claudeSessionId} (no explicit completion signal)`);
       activeSessions.delete(claudeSessionId);
       updateTaskSession(taskSession.id, { endedAt: new Date().toISOString() });
-      // Don't auto-mark task as done — it may need re-running
+
+      // Mark as failed so user/Mayor can decide what to do
+      updateTask(taskId, { status: 'failed', completedAt: new Date().toISOString(), errorMessage: 'Agent process exited without TASK_COMPLETE or TASK_FAILED signal' });
+
+      createMessage({
+        type: 'event',
+        source: 'sessionManager',
+        subject: `Task incomplete: ${task.title}`,
+        body: `Agent "${agent.name}" process exited for task "${task.title}" without outputting TASK_COMPLETE or TASK_FAILED.`,
+      });
+
+      eventBus.emitEvent({ type: 'task:updated', taskId });
       eventBus.emitEvent({ type: 'agent:session_stopped', sessionId: claudeSessionId, agentId, taskId });
     }
   });

@@ -35,6 +35,7 @@ export async function createTask(data: {
   permissionMode?: string;
   tags?: string[];
   dueDate?: string;
+  workingDir?: string;
 }): Promise<Task> {
   const res = await fetch('/api/tasks', {
     method: 'POST',
