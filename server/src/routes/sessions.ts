@@ -77,10 +77,10 @@ router.post('/new', async (req, res) => {
     if (model && typeof model === 'string') {
       cliFlags.push('--model', model);
     }
-    if (permissionMode && typeof permissionMode === 'string') {
-      cliFlags.push('--permission-mode', permissionMode);
-    } else {
+    if (permissionMode === 'bypassPermissions' || !permissionMode) {
       cliFlags.push('--dangerously-skip-permissions');
+    } else {
+      cliFlags.push('--permission-mode', permissionMode);
     }
 
     let sessionId: string | undefined;

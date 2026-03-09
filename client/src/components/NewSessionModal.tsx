@@ -10,10 +10,11 @@ const MODEL_OPTIONS = [
 ];
 
 const PERMISSION_OPTIONS = [
-  { value: 'full', label: 'Full' },
-  { value: 'default', label: 'Default' },
-  { value: 'plan', label: 'Plan' },
-  { value: 'ask', label: 'Ask' },
+  { value: 'bypassPermissions', label: 'bypassPermissions' },
+  { value: 'default', label: 'default' },
+  { value: 'plan', label: 'plan' },
+  { value: 'acceptEdits', label: 'acceptEdits' },
+  { value: 'dontAsk', label: 'dontAsk' },
 ];
 
 interface Props {
@@ -27,7 +28,7 @@ export default function NewSessionModal({ onClose, onCreate }: Props) {
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [model, setModel] = useState('opus');
-  const [permissionMode, setPermissionMode] = useState('full');
+  const [permissionMode, setPermissionMode] = useState('bypassPermissions');
 
   const handlePathChange = useCallback((path: string, gitRepo: boolean) => {
     setCurrentPath(path);

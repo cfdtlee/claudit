@@ -25,6 +25,7 @@ export class ClaudeProcess extends EventEmitter {
   private lastMessageId = '';
   private sentToolUseIds = new Set<string>();
   private userMessageSent = false;
+  private resumeReady = false;
   private pendingMessage: string | null = null;
 
   constructor(sessionId: string, projectPath: string, extraArgs?: string[]) {
@@ -41,6 +42,7 @@ export class ClaudeProcess extends EventEmitter {
     this.sentToolUseIds.clear();
     this.stdoutBuffer = '';
     this.stderrBuffer = '';
+    this.resumeReady = false;
   }
 
   private _spawnProcess(onClose: (code: number | null) => void): ChildProcess {
@@ -93,6 +95,8 @@ export class ClaudeProcess extends EventEmitter {
         const msg = this.pendingMessage;
         this.pendingMessage = null;
         this.restart(msg);
+      } else {
+        console.log('[claude] Process exited during resume (no pending message)');
       }
     });
   }
@@ -111,6 +115,7 @@ export class ClaudeProcess extends EventEmitter {
     this.proc = this._spawnProcess((code) => {
       console.log(`[claude] Restarted process exited with code ${code}`);
       this.emit('done');
+      this.emit('process_exit', code);
       this.proc = null;
     });
 
@@ -200,7 +205,16 @@ export class ClaudeProcess extends EventEmitter {
 
       case 'result':
         if (!this.userMessageSent) {
-          console.log('[claude] Ignoring initial resume result');
+          console.log('[claude] Resume replay complete, CLI ready for input');
+          this.resumeReady = true;
+
+          // Flush any queued message now that resume is done
+          if (this.pendingMessage) {
+            const pending = this.pendingMessage;
+            this.pendingMessage = null;
+            console.log(`[claude] Flushing pending message: ${pending.slice(0, 100)}`);
+            this._doSendMessage(pending);
+          }
           break;
         }
         if (event.result && typeof event.result === 'string' && this.lastTextLength === 0) {
@@ -225,7 +239,25 @@ export class ClaudeProcess extends EventEmitter {
       return;
     }
 
+    // If CLI is still resuming (no result yet), queue message for later
+    if (!this.userMessageSent && !this.resumeReady) {
+      console.log(`[claude] CLI still resuming, queuing message: ${content.slice(0, 100)}`);
+      this.pendingMessage = content;
+      return;
+    }
+
+    this._doSendMessage(content);
+  }
+
+  private _doSendMessage(content: string) {
+    if (!this.proc?.stdin?.writable) {
+      console.log('[claude] Process not running, restarting for message...');
+      this.restart(content);
+      return;
+    }
+
     this.userMessageSent = true;
+    this.resumeReady = false;
     this.lastTextLength = 0;
     this.lastThinkingLength = 0;
     this.lastMessageId = '';
