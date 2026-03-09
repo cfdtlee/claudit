@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 *.local
 
 # Vite
@@ -17,7 +19,18 @@ Thumbs.db
 *.swo
 
 # Claude Code
-.claude/settings.local.json
+.claude/
+
+# Build artifacts
+*.tgz
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# MCP local config
+.mcp.json
 
 # Logs
 *.log

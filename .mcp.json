@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "claudit": {
-      "command": "node",
-      "args": ["bin/claudit-mcp.js"]
-    }
-  }
-}
