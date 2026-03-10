@@ -3,6 +3,7 @@ import { SessionDetail as SessionDetailType, Task } from '../../types';
 import { fetchSessionDetail, markSessionSeen } from '../../api/sessions';
 import { fetchTasks } from '../../api/tasks';
 import { useUIStore } from '../../stores/useUIStore';
+import { useSessionStore } from '../../stores/useSessionStore';
 import { cn } from '../../lib/utils';
 import { Info, ExternalLink, Terminal, History, Copy, Check, Loader2 } from 'lucide-react';
 import EmptyState from './EmptyState';
@@ -19,9 +20,10 @@ interface Props {
   isNew?: boolean;
   slug?: string;
   slugSessionIds?: string[];
+  isMultiPane?: boolean;
 }
 
-export default function SessionDetail({ projectHash, sessionId, projectPath, isNew, slug, slugSessionIds }: Props) {
+export default function SessionDetail({ projectHash, sessionId, projectPath, isNew, slug, slugSessionIds, isMultiPane }: Props) {
   const [detail, setDetail] = useState<SessionDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,15 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
 
   const setView = useUIStore(s => s.setView);
   const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
+
+  // Find session summary from store for displayName/lastMessage (matches list item title)
+  const sessionDisplayName = useSessionStore(s => {
+    for (const g of s.groups) {
+      const found = g.sessions.find(sess => sess.sessionId === sessionId);
+      if (found) return found.displayName || found.lastMessage || null;
+    }
+    return null;
+  });
 
   const hasMergedHistory = !!(slug && slugSessionIds && slugSessionIds.length > 1);
 
@@ -100,7 +111,7 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
   if (error && !detail) {
     return (
       <div className="flex flex-col h-full">
-        <div className="border-b border-border px-6 py-3 bg-card/50 shrink-0">
+        <div className="border-b border-border px-6 bg-card/50 shrink-0 h-11 flex items-center">
           <div className="text-sm font-medium text-foreground truncate font-mono">
             {sessionId.slice(0, 8)}...
           </div>
@@ -120,12 +131,12 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
 
   const displayTitle = linkedTask
     ? linkedTask.title
-    : detail.projectPath.split('/').pop() || detail.sessionId;
+    : sessionDisplayName || detail.projectPath.split('/').pop() || detail.sessionId;
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b border-border px-6 py-3 bg-card/30 flex items-center justify-between shrink-0">
+      <div className={cn("border-b border-border bg-card/30 flex items-center justify-between shrink-0 h-11 pr-6", isMultiPane ? "pl-8" : "pl-6")}>
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="text-sm font-medium text-foreground truncate">
             {displayTitle}
@@ -166,7 +177,7 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
             </button>
           )}
 
-          {hasMergedHistory && (
+          {false && hasMergedHistory && (
             <div className="flex gap-0.5 bg-secondary/50 rounded-lg p-0.5">
               <button
                 onClick={() => setActiveTab('terminal')}

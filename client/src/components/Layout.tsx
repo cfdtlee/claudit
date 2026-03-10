@@ -4,6 +4,7 @@ const SIDEBAR_STORAGE_KEY = 'claudit:sidebar-width';
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 500;
 const SIDEBAR_DEFAULT = 300;
+const SIDEBAR_HIDE_THRESHOLD = 180;
 
 const NAV_STORAGE_KEY = 'claudit:nav-width';
 const NAV_MIN = 56;
@@ -34,6 +35,7 @@ export default function Layout({ nav, sidebar, main }: Props) {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     loadWidth(SIDEBAR_STORAGE_KEY, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT)
   );
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const sidebarDragging = useRef(false);
   const sidebarWidthRef = useRef(sidebarWidth);
   sidebarWidthRef.current = sidebarWidth;
@@ -68,9 +70,15 @@ export default function Layout({ nav, sidebar, main }: Props) {
       }
       if (sidebarDragging.current) {
         const offset = navWidthRef.current;
-        const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX - offset));
-        setSidebarWidth(newWidth);
-        sidebarWidthRef.current = newWidth;
+        const raw = e.clientX - offset;
+        if (raw < SIDEBAR_HIDE_THRESHOLD) {
+          setSidebarHidden(true);
+        } else {
+          setSidebarHidden(false);
+          const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, raw));
+          setSidebarWidth(newWidth);
+          sidebarWidthRef.current = newWidth;
+        }
       }
     };
     const onMouseUp = () => {
@@ -109,7 +117,7 @@ export default function Layout({ nav, sidebar, main }: Props) {
         style={{ width: navWidth }}
       >
         {typeof nav === 'object' && nav !== null && 'type' in (nav as any)
-          ? <NavWrapper collapsed={collapsed}>{nav}</NavWrapper>
+          ? <NavWrapper collapsed={collapsed} sidebarHidden={sidebarHidden} onToggleSidebar={() => setSidebarHidden(h => !h)}>{nav}</NavWrapper>
           : nav}
       </nav>
 
@@ -125,12 +133,14 @@ export default function Layout({ nav, sidebar, main }: Props) {
           /* Outer panel — glass wraps sidebar list + detail */
           <div className="glass-panel rounded-xl h-full overflow-hidden flex relative">
             {/* Sidebar list */}
-            <aside
-              className="flex-shrink-0 overflow-hidden"
-              style={{ width: sidebarWidth }}
-            >
-              {sidebar}
-            </aside>
+            {!sidebarHidden && (
+              <aside
+                className="flex-shrink-0 overflow-hidden"
+                style={{ width: sidebarWidth }}
+              >
+                {sidebar}
+              </aside>
+            )}
 
             {/* Gradient orbs — between list and detail panel so detail glass shows transparency */}
             <div className="absolute inset-0 pointer-events-none z-[1]" aria-hidden="true">
@@ -139,14 +149,16 @@ export default function Layout({ nav, sidebar, main }: Props) {
             </div>
 
             {/* Sidebar resize handle — absolute so no layout gap */}
-            <div
-              onMouseDown={onSidebarMouseDown}
-              className="absolute top-0 bottom-0 w-[6px] cursor-col-resize z-30"
-              style={{ left: sidebarWidth - 3 }}
-            />
+            {!sidebarHidden && (
+              <div
+                onMouseDown={onSidebarMouseDown}
+                className="absolute top-0 bottom-0 w-[6px] cursor-col-resize z-30"
+                style={{ left: sidebarWidth - 3 }}
+              />
+            )}
 
             {/* Detail panel — elevated glass overlay, z-[2] above orbs so glass transparency shows them */}
-            <main className="overflow-hidden flex flex-col glass-panel-elevated rounded-xl flex-1 min-w-0 my-2.5 mr-2.5 relative z-[2]">
+            <main className="overflow-hidden flex flex-col glass-panel-elevated rounded-xl flex-1 min-w-0 relative z-[2] p-0.5">
               {main}
             </main>
           </div>
@@ -170,10 +182,15 @@ export default function Layout({ nav, sidebar, main }: Props) {
 export const NavCollapsedContext = createContext(false);
 export function useNavCollapsed() { return useContext(NavCollapsedContext); }
 
-function NavWrapper({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
+const SidebarToggleContext = createContext<{ hidden: boolean; toggle: () => void }>({ hidden: false, toggle: () => {} });
+export function useSidebarToggle() { return useContext(SidebarToggleContext); }
+
+function NavWrapper({ collapsed, sidebarHidden, onToggleSidebar, children }: { collapsed: boolean; sidebarHidden: boolean; onToggleSidebar: () => void; children: ReactNode }) {
   return (
     <NavCollapsedContext.Provider value={collapsed}>
-      {children}
+      <SidebarToggleContext.Provider value={{ hidden: sidebarHidden, toggle: onToggleSidebar }}>
+        {children}
+      </SidebarToggleContext.Provider>
     </NavCollapsedContext.Provider>
   );
 }

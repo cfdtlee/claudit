@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import { SessionSummary } from '../../types';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useUIStore } from '../../stores/useUIStore';
@@ -35,6 +36,19 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
   const [editValue, setEditValue] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: `session-drag-${session.sessionId}`,
+    data: {
+      type: 'session',
+      projectHash,
+      sessionId: session.sessionId,
+      projectPath: session.projectPath,
+      displayText: session.displayName || session.lastMessage,
+      slug: session.slug,
+      slugSessionIds: session.slugSessionIds,
+    },
+  });
 
   const selected = useUIStore(s => s.selected);
   const selectSession = useUIStore(s => s.selectSession);
@@ -105,9 +119,13 @@ function SessionItem({ session, projectHash, isArchived, multiSelected, onMultiC
 
   return (
     <div
+      ref={setDragRef}
+      {...listeners}
+      {...attributes}
       className={cn(
         'group relative w-full text-left transition-all cursor-pointer',
-        (multiSelected || (isSelected && !multiSelected)) ? 'list-item-selected' : 'list-item-hover'
+        (multiSelected || (isSelected && !multiSelected)) ? 'list-item-selected' : 'list-item-hover',
+        isDragging && 'opacity-40'
       )}
       onMouseDown={handleMouseDown}
       onClick={handleClick}

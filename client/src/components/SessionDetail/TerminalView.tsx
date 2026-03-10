@@ -255,8 +255,8 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
         </div>
       )}
 
-      {/* Terminal container — padding on wrapper so FitAddon measures correct dimensions */}
-      <div className="flex-1 min-h-0" style={{ padding: '8px 10px' }}>
+      {/* Terminal container */}
+      <div className="flex-1 min-h-0" style={{ padding: '1px 1px' }}>
         <div
           ref={containerRef}
           className="h-full w-full"
