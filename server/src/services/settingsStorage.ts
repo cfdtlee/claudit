@@ -6,6 +6,7 @@ const stmtSet = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES 
 const stmtAll = db.prepare('SELECT key, value FROM settings');
 
 const DEFAULTS: ClauditConfig = {
+  serverPort: 3001,
   defaultModel: 'sonnet',
   defaultPermissionMode: 'default',
   workingDirectory: '',
@@ -27,7 +28,7 @@ const BOOL_KEYS = new Set([
 ]);
 
 const NUMBER_KEYS = new Set([
-  'maxConcurrentWorkers', 'sessionTimeoutMs', 'witnessIntervalMs', 'patrolIntervalMs',
+  'serverPort', 'maxConcurrentWorkers', 'sessionTimeoutMs', 'witnessIntervalMs', 'patrolIntervalMs',
 ]);
 
 export function getSetting(key: string): string | undefined {

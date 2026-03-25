@@ -3,14 +3,15 @@ import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, openSyn
 import { join } from 'path';
 import { homedir, platform } from 'os';
 import { get } from 'http';
+import { getResolvedPort } from './resolvePort.js';
 
 const DATA_DIR = join(homedir(), '.claudit');
 const PID_FILE = join(DATA_DIR, 'claudit.pid');
 const LOG_FILE = join(DATA_DIR, 'claudit.log');
-const DEFAULT_PORT = 3001;
 
 export function openBrowser(port) {
-  const url = `http://localhost:${port || DEFAULT_PORT}`;
+  const p = port != null && Number(port) > 0 ? Number(port) : getResolvedPort();
+  const url = `http://localhost:${p}`;
   const os = platform();
   try {
     if (os === 'darwin') {
@@ -53,7 +54,7 @@ export function startDaemon(clauditScript) {
   const existingPid = readPid();
   if (existingPid && isProcessRunning(existingPid)) {
     console.log(`Claudit is already running (PID ${existingPid})`);
-    openBrowser(process.env.PORT || DEFAULT_PORT);
+    openBrowser(getResolvedPort());
     return Promise.resolve();
   }
 
@@ -67,14 +68,13 @@ export function startDaemon(clauditScript) {
   writeFileSync(PID_FILE, String(child.pid));
   child.unref();
 
-  const port = process.env.PORT || DEFAULT_PORT;
   console.log(`Claudit started (PID ${child.pid})`);
   console.log(`Log file: ${LOG_FILE}`);
 
   // Wait briefly for server to start, then open browser
   return new Promise((resolve) => {
     setTimeout(() => {
-      openBrowser(port);
+      openBrowser(getResolvedPort());
       resolve();
     }, 1500);
   });
@@ -109,7 +109,7 @@ export async function stopDaemon(force = false) {
 
   // Check for active sessions unless --force
   if (!force) {
-    const port = process.env.PORT || DEFAULT_PORT;
+    const port = getResolvedPort();
     const groups = await fetchSessions(port);
     const active = [];
     for (const group of groups) {

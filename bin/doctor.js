@@ -9,6 +9,7 @@ import { createServer } from 'net';
 import { get } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { getResolvedPort } from './resolvePort.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,7 +24,6 @@ const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 
 const DATA_DIR = join(homedir(), '.claudit');
 const PID_FILE = join(DATA_DIR, 'claudit.pid');
-const DEFAULT_PORT = 3001;
 const EXPECTED_SCHEMA_VERSION = 8;
 
 let passed = 0;
@@ -174,7 +174,7 @@ if (!existsSync(dbPath)) {
 
 section('Server');
 
-const port = parseInt(process.env.PORT, 10) || DEFAULT_PORT;
+const port = getResolvedPort();
 
 // Daemon PID check
 let daemonRunning = false;

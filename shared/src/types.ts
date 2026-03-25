@@ -207,6 +207,8 @@ export interface MayorMessage {
 // --- Settings Types ---
 
 export interface ClauditConfig {
+  /** HTTP port when `PORT` is unset. Requires server restart. */
+  serverPort?: number;
   defaultModel?: string;
   defaultPermissionMode?: string;
   workingDirectory?: string;

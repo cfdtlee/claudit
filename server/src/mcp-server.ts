@@ -13,13 +13,14 @@ import {
 import { getAllAgents, getAgent } from './services/agentStorage.js';
 import { getAllMessages, createMessage, markMessageRead, markAllRead, getUnreadCount } from './services/messageStorage.js';
 import { getSettingsObject, getSetting, setSetting } from './services/settingsStorage.js';
+import { resolveServerPort } from './serverPort.js';
 
 const server = new McpServer({
   name: 'claudit',
   version: '0.2.0',
 });
 
-const SERVER_PORT = parseInt(process.env.PORT || '3001', 10);
+const SERVER_PORT = resolveServerPort();
 
 /** Call main server's internal API synchronously */
 async function serverCall(endpoint: string, body: Record<string, unknown>): Promise<{ ok: boolean; data?: any; error?: string }> {

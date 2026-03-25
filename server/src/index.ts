@@ -28,11 +28,12 @@ import { ensureMayorRunning, stopMayor, sendToMayor, isMayorEnabled } from './se
 import { updateTask, getTask, getAllTasks } from './services/taskStorage.js';
 import { getAgent } from './services/agentStorage.js';
 import { getSetting, getSettingsObject } from './services/settingsStorage.js';
+import { resolveServerPort } from './serverPort.js';
 import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions } from './services/sessionManager.js';
 import { createMessage } from './services/messageStorage.js';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = resolveServerPort();
 const CLAUDIT_ROOT = process.env.CLAUDIT_ROOT;
 
 app.use(cors());

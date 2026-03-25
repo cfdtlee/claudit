@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import { createRequire } from 'module';
 import { readFileSync } from 'fs';
 import { startDaemon, stopDaemon, statusDaemon, installService, uninstallService, openBrowser } from './daemon.js';
+import { getResolvedPort } from './resolvePort.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,7 +31,7 @@ if (cmd === 'status') {
 }
 
 if (cmd === 'open') {
-  openBrowser(process.env.PORT);
+  openBrowser(getResolvedPort());
   process.exit(0);
 }
 
@@ -82,8 +83,11 @@ Options:
   -v, --version  Show version number
 
 Environment variables:
-  PORT           Server port (default: 3001)
+  PORT           Server port (overrides saved setting; default: 3001)
   NODE_ENV       Set to "development" for dev mode
+
+Settings (Dashboard → Settings, or ~/.claudit/*.db):
+  serverPort     HTTP port when PORT is not set. Restart required.
 
 MCP Server:
   claudit-mcp provides management tools for Claude Code.

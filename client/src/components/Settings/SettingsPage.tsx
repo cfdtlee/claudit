@@ -92,6 +92,20 @@ export default function SettingsPage() {
                 className={inputCls}
               />
             </div>
+            <div>
+              <label className={labelCls}>Server Port</label>
+              <p className="text-xs text-muted-foreground mb-2">
+                HTTP port when the <code className="text-foreground/80">PORT</code> environment variable is not set. Restart the server after changing.
+              </p>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={config.serverPort ?? 3001}
+                onChange={e => handleChange('serverPort', Number(e.target.value))}
+                className={inputCls}
+              />
+            </div>
           </div>
         </div>
 
