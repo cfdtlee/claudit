@@ -7,7 +7,7 @@ import { get } from 'http';
 const DATA_DIR = join(homedir(), '.claudit');
 const PID_FILE = join(DATA_DIR, 'claudit.pid');
 const LOG_FILE = join(DATA_DIR, 'claudit.log');
-const DEFAULT_PORT = 3001;
+const DEFAULT_PORT = 7433;
 
 export function openBrowser(port) {
   const url = `http://localhost:${port || DEFAULT_PORT}`;

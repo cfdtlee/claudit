@@ -11,9 +11,10 @@ interface Props {
   sessionId: string;
   projectPath: string;
   isNew?: boolean;
+  permissionMode?: string;
 }
 
-export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
+export default function TerminalView({ sessionId, projectPath, isNew, permissionMode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -127,6 +128,7 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
         type: isNew ? 'new' : 'resume',
         sessionId,
         projectPath,
+        permissionMode,
         cols: dims?.cols || 80,
         rows: dims?.rows || 24,
       }));
@@ -231,7 +233,7 @@ export default function TerminalView({ sessionId, projectPath, isNew }: Props) {
       setStatus('connecting');
       setTermReady(false);
     };
-  }, [sessionId, projectPath, isNew]);
+  }, [sessionId, projectPath, isNew, permissionMode]);
 
   return (
     <div className="flex flex-col h-full">

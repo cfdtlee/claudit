@@ -132,7 +132,8 @@ function spawnPty(
   isNew: boolean,
   cwd: string,
   cols: number,
-  rows: number
+  rows: number,
+  permissionMode?: string
 ): PtyEntry {
   if (!pty) throw new Error('node-pty is not installed. Run: npm install node-pty');
 
@@ -144,6 +145,13 @@ function spawnPty(
   const args = sessionId
     ? ['--resume', sessionId]
     : [];
+
+  // Add permission flags — default to bypass permissions
+  if (permissionMode === 'bypassPermissions' || !permissionMode) {
+    args.push('--dangerously-skip-permissions');
+  } else {
+    args.push('--permission-mode', permissionMode);
+  }
 
   console.log(`[pty] Spawning: claude ${args.join(' ')} in ${cwd} (${cols}x${rows})`);
 
@@ -269,7 +277,7 @@ export function handleTerminalConnection(ws: WebSocket) {
     switch (msg.type) {
       case 'resume':
       case 'new': {
-        const { sessionId, projectPath, cols, rows } = msg;
+        const { sessionId, projectPath, permissionMode, cols, rows } = msg;
         const isNew = msg.type === 'new';
         const key = getPtyKey(sessionId, isNew);
         const cwd = (projectPath && fs.existsSync(projectPath)) ? projectPath : os.homedir();
@@ -291,7 +299,7 @@ export function handleTerminalConnection(ws: WebSocket) {
             attachWs(existing, ws);
           } else {
             // Spawn new PTY
-            const entry = spawnPty(key, sessionId, isNew, cwd, cols, rows);
+            const entry = spawnPty(key, sessionId, isNew, cwd, cols, rows, permissionMode);
             attachWs(entry, ws);
           }
         } catch (err: any) {

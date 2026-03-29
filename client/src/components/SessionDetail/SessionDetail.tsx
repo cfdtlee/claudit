@@ -21,9 +21,10 @@ interface Props {
   slug?: string;
   slugSessionIds?: string[];
   isMultiPane?: boolean;
+  permissionMode?: string;
 }
 
-export default function SessionDetail({ projectHash, sessionId, projectPath, isNew, slug, slugSessionIds, isMultiPane }: Props) {
+export default function SessionDetail({ projectHash, sessionId, projectPath, isNew, slug, slugSessionIds, isMultiPane, permissionMode }: Props) {
   const [detail, setDetail] = useState<SessionDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +122,7 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
             <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
         }>
-          <TerminalView sessionId={sessionId} projectPath={projectPath} />
+          <TerminalView sessionId={sessionId} projectPath={projectPath} permissionMode={permissionMode} />
         </Suspense>
       </div>
     );
@@ -213,7 +214,7 @@ export default function SessionDetail({ projectHash, sessionId, projectPath, isN
             <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
         }>
-          <TerminalView sessionId={sessionId} projectPath={projectPath} isNew={isNew} />
+          <TerminalView sessionId={sessionId} projectPath={projectPath} isNew={isNew} permissionMode={permissionMode} />
         </Suspense>
       ) : (
         <Suspense fallback={

@@ -94,15 +94,20 @@ export default function App() {
 
   // Sync UIStore.selected -> active pane session
   useEffect(() => {
-    if (view !== 'sessions' || !selected) return;
-    usePaneStore.getState().setSessionInActivePane({
-      projectHash: selected.projectHash,
-      sessionId: selected.sessionId,
-      projectPath: selected.projectPath,
-      isNew: selected.isNew,
-      slug: selected.slug,
-      slugSessionIds: selected.slugSessionIds,
-    });
+    if (view !== 'sessions') return;
+    if (selected) {
+      usePaneStore.getState().setSessionInActivePane({
+        projectHash: selected.projectHash,
+        sessionId: selected.sessionId,
+        projectPath: selected.projectPath,
+        isNew: selected.isNew,
+        slug: selected.slug,
+        slugSessionIds: selected.slugSessionIds,
+      });
+    } else {
+      // Clear the active pane to show EmptyState
+      usePaneStore.getState().setSessionInActivePane(null);
+    }
   }, [selected, view]);
 
   // Sync active pane -> UIStore.selected

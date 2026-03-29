@@ -138,8 +138,8 @@ router.post('/new', async (req, res) => {
           reject(err);
         });
 
-        // Send a trivial prompt to minimize Claude response time
-        proc.stdin.write('hi');
+        // Send the user's prompt (or a trivial one to just create the session)
+        proc.stdin.write(initialPrompt?.trim() || 'hi');
         proc.stdin.end();
       });
     } catch (e: any) {

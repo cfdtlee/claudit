@@ -82,7 +82,7 @@ Options:
   -v, --version  Show version number
 
 Environment variables:
-  PORT           Server port (default: 3001)
+  PORT           Server port (default: 7433)
   NODE_ENV       Set to "development" for dev mode
 
 MCP Server:

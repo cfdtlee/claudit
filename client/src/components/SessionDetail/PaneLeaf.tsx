@@ -123,6 +123,7 @@ export default function PaneLeaf({ leaf, isOnly, isDragging, onCreateSession }: 
           slug={leaf.session.slug}
           slugSessionIds={leaf.session.slugSessionIds}
           isMultiPane={!isOnly}
+          permissionMode={leaf.session.permissionMode}
         />
       ) : (
         <EmptyState onCreateSession={onCreateSession} />

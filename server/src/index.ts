@@ -32,7 +32,7 @@ import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions 
 import { createMessage } from './services/messageStorage.js';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '7433', 10);
 const CLAUDIT_ROOT = process.env.CLAUDIT_ROOT;
 
 app.use(cors());

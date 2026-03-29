@@ -6,8 +6,8 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MergedSessionDetail, ParsedMessage } from '../../types';
 import { fetchMergedSessionDetail } from '../../api/sessions';
 
-const INITIAL_COUNT = 100;
-const LOAD_MORE_COUNT = 100;
+const INITIAL_COUNT = 2000;
+const LOAD_MORE_COUNT = 2000;
 
 interface Props {
   projectHash: string;
@@ -151,7 +151,18 @@ export default function ConversationView({ projectHash, slug }: Props) {
     if (!containerRef.current || !data) return;
     const { scrollTop } = containerRef.current;
     const startIndex = Math.max(0, data.messages.length - visibleCount);
-    if (scrollTop < 150 && startIndex > 0) {
+    if (scrollTop < 400 && startIndex > 0) {
+      // Load all remaining when user scrolls near top
+      setVisibleCount(data.messages.length);
+    }
+  }, [data, visibleCount]);
+
+  // Auto-load more if content doesn't fill the container (can't scroll to trigger loadMore)
+  useEffect(() => {
+    if (!containerRef.current || !data) return;
+    const el = containerRef.current;
+    const startIndex = Math.max(0, data.messages.length - visibleCount);
+    if (startIndex > 0 && el.scrollHeight <= el.clientHeight) {
       loadMore();
     }
   }, [data, visibleCount, loadMore]);

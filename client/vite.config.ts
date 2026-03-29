@@ -22,9 +22,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:3002',
+      '/api': 'http://localhost:7433',
       '/ws': {
-        target: 'ws://localhost:3002',
+        target: 'ws://localhost:7433',
         ws: true,
       },
     },

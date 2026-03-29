@@ -219,11 +219,7 @@ export function getRecentTasks(limit: number): Task[] {
 }
 
 export function getTokenUsageToday(): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString();
-  const row = db.prepare('SELECT COALESCE(SUM(tokenUsage), 0) as total FROM tasks WHERE completedAt >= ?').get(todayStr) as any;
-  return row?.total ?? 0;
+  return 0;
 }
 
 export function reorderTasks(items: { id: string; order: number }[]): void {

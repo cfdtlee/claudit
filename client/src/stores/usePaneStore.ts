@@ -7,6 +7,7 @@ export interface PaneSession {
   isNew?: boolean;
   slug?: string;
   slugSessionIds?: string[];
+  permissionMode?: string;
 }
 
 export interface LeafPane {
@@ -105,7 +106,7 @@ interface PaneState {
   splitPane: (targetPaneId: string, position: DropPosition, session: PaneSession) => void;
   closePane: (paneId: string) => void;
   setActivePane: (paneId: string) => void;
-  setSessionInActivePane: (session: PaneSession) => void;
+  setSessionInActivePane: (session: PaneSession | null) => void;
   movePane: (sourcePaneId: string, targetPaneId: string, position: DropPosition) => void;
   resizeSplit: (splitId: string, ratio: number) => void;
   getActiveSession: () => PaneSession | null;

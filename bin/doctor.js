@@ -23,7 +23,7 @@ const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 
 const DATA_DIR = join(homedir(), '.claudit');
 const PID_FILE = join(DATA_DIR, 'claudit.pid');
-const DEFAULT_PORT = 3001;
+const DEFAULT_PORT = 7433;
 const EXPECTED_SCHEMA_VERSION = 8;
 
 let passed = 0;
