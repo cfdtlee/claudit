@@ -5,9 +5,9 @@ import { handleHealth } from "./health.js";
 import { parseJoinMessage, isPing, type Channel, type Role } from "./protocol.js";
 
 const PORT = parseInt(process.env.PORT || "8080", 10);
-const MAX_MESSAGE_SIZE = 1 * 1024 * 1024; // 1MB
+const MAX_MESSAGE_SIZE = 2 * 1024 * 1024; // 2MB (large session responses)
 const JOIN_TIMEOUT_MS = 30_000;
-const WS_PING_INTERVAL_MS = 30_000;
+const WS_PING_INTERVAL_MS = 8_000; // Aggressive pinging to prevent Fly.io proxy idle timeout
 
 const rooms = new RoomManager();
 

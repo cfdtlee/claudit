@@ -198,23 +198,35 @@ struct SessionDetailView: View {
 
         Task {
             do {
-                // Resume PTY session
+                // IMPORTANT: Prepare listener BEFORE sending resume (fixes race condition)
+                tunnel.prepareForReady()
+
                 let projectPath = viewModel.selectedDetail?.projectPath ?? ""
                 let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
                 try tunnel.sendTerminalControl(resume)
 
-                // Wait for PTY ready signal (max 10s)
                 sendStatus = "Waiting for session..."
-                _ = await tunnel.waitForReady(timeout: 10)
+                let ready = await tunnel.waitForReady(timeout: 15)
 
-                // Send the message
+                if !ready {
+                    sendStatus = "Session not available. Try opening Terminal."
+                    try? await Task.sleep(for: .seconds(3))
+                    isSending = false
+                    sendStatus = nil
+                    return
+                }
+
+                // PTY is ready — send the message
                 sendStatus = "Sending to Claude..."
                 try tunnel.sendTerminalInput(savedText + "\r")
-
                 sendStatus = "Waiting for response..."
+
+                // The event listener will auto-refresh when session:updated fires
             } catch {
-                sendStatus = "Failed: \(error.localizedDescription)"
+                sendStatus = "Error: \(error.localizedDescription)"
+                try? await Task.sleep(for: .seconds(3))
                 isSending = false
+                sendStatus = nil
             }
         }
     }

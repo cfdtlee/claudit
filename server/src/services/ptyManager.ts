@@ -126,6 +126,40 @@ async function detectExternalClaude(sessionId: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Kill any stale external Claude processes using this session.
+ * This prevents session lock conflicts when resuming from the iOS app.
+ */
+async function killStaleClaudeProcesses(sessionId: string): Promise<void> {
+  if (!sessionId) return;
+
+  // Don't kill our own PTY processes
+  const ourPids = new Set<number>();
+  for (const entry of ptyCache.values()) {
+    if (entry.sessionId === sessionId && !entry.exited) {
+      ourPids.add(entry.process.pid);
+    }
+  }
+
+  try {
+    const { stdout } = await execFileAsync('pgrep', ['-f', `claude.*--resume.*${sessionId}`], {
+      encoding: 'utf-8',
+      timeout: 3000,
+    });
+    const pids = stdout.trim().split('\n').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && !ourPids.has(p));
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+        console.log(`[pty] Killed stale claude process ${pid} for session ${sessionId}`);
+      } catch { /* already dead */ }
+    }
+    if (pids.length > 0) {
+      // Wait briefly for processes to exit
+      await new Promise(r => setTimeout(r, 500));
+    }
+  } catch { /* no matches */ }
+}
+
 function spawnPty(
   key: string,
   sessionId: string,
@@ -289,23 +323,25 @@ export function handleTerminalConnection(ws: WebSocket) {
         }
         currentKey = key;
 
-        try {
-          // Check if there's an existing alive PTY for this session
-          const existing = ptyCache.get(key);
-          if (existing && !existing.exited) {
-            console.log(`[pty] Reattaching to existing PTY: ${key}`);
-            // Resize to match new client
-            try { existing.process.resize(cols || 80, rows || 24); } catch {}
-            attachWs(existing, ws);
-          } else {
-            // Spawn new PTY
-            const entry = spawnPty(key, sessionId, isNew, cwd, cols, rows, permissionMode);
-            attachWs(entry, ws);
+        // Use async IIFE to allow await for stale process cleanup
+        (async () => {
+          try {
+            const existing = ptyCache.get(key);
+            if (existing && !existing.exited) {
+              console.log(`[pty] Reattaching to existing PTY: ${key}`);
+              try { existing.process.resize(cols || 80, rows || 24); } catch {}
+              attachWs(existing, ws);
+            } else {
+              // Kill any stale claude processes holding this session lock
+              await killStaleClaudeProcesses(sessionId);
+              const entry = spawnPty(key, sessionId, isNew, cwd, cols, rows, permissionMode);
+              attachWs(entry, ws);
+            }
+          } catch (err: any) {
+            console.error(`[pty] Spawn error: ${err.message}`);
+            sendControl(ws, { type: 'error', message: err.message });
           }
-        } catch (err: any) {
-          console.error(`[pty] Spawn error: ${err.message}`);
-          sendControl(ws, { type: 'error', message: err.message });
-        }
+        })();
         break;
       }
 

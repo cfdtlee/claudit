@@ -59,6 +59,7 @@ final class TerminalViewModel {
 
         // Send resume command to attach to the PTY session
         if let tunnel {
+            tunnel.prepareForReady()
             do {
                 let resumeMsg = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
                 try tunnel.sendTerminalControl(resumeMsg)
@@ -87,7 +88,6 @@ final class TerminalViewModel {
                 case "ready":
                     let sid = String((json["sessionId"] as? String ?? "?").prefix(8))
                     appendOutput("[\u{1B}[32mSession \(sid) ready\u{1B}[0m]\n")
-                    tunnel?.signalReady()
                 case "exit":
                     let code = json["exitCode"] as? Int ?? -1
                     if code == 0 {
