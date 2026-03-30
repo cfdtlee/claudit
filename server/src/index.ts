@@ -12,6 +12,7 @@ import taskRoutes from './routes/tasks.js';
 import settingsRoutes from './routes/settings.js';
 import dashboardRoutes from './routes/dashboard.js';
 import groupRoutes from './routes/groups.js';
+import relayRoutes from './routes/relay.js';
 import { ClaudeProcess } from './services/claudeProcess.js';
 import { initScheduler, stopAllJobs } from './services/cronScheduler.js';
 let handleTerminalConnection: ((ws: import('ws').WebSocket) => void) | null = null;
@@ -29,6 +30,7 @@ import { updateTask, getTask, getAllTasks } from './services/taskStorage.js';
 import { getAgent } from './services/agentStorage.js';
 import { getSetting, getSettingsObject } from './services/settingsStorage.js';
 import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions } from './services/sessionManager.js';
+import { stopRelay } from './services/relayConnector.js';
 import { createMessage } from './services/messageStorage.js';
 
 const app = express();
@@ -48,6 +50,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/relay', relayRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -346,6 +349,7 @@ server.listen(PORT, () => {
   for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     process.on(sig, () => {
       clearInterval(patrolTimer);
+      stopRelay();
       stopAllAgentSessions();
       stopWitness();
       stopMayor();

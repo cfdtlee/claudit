@@ -9,11 +9,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@types/qrcode": "^1.5.6",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "node-cron": "^4.2.1",
     "node-pty": "^1.1.0",
+    "qrcode": "^1.5.4",
     "ws": "^8.18.0",
     "zod": "^4.3.6"
   },
