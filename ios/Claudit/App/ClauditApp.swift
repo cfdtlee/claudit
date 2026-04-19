@@ -48,11 +48,6 @@ struct MainTabView: View {
                 }
         }
         .tint(Color.accentBlue)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                ConnectionIndicator()
-            }
-        }
         .onAppear {
             appState.connect()
         }

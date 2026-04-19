@@ -9,11 +9,18 @@ struct SessionDetailView: View {
     @State private var isSending = false
     @State private var sendStatus: String?
     @State private var reloadWorkItem: DispatchWorkItem?
+    @State private var pendingUserMessage: String?
+    @State private var chatResumed = false
 
     let projectHash: String
     let sessionId: String
     let slug: String?
     let slugPartCount: Int?
+
+    // Stable ID for the pending/typing indicators at the bottom
+    private let pendingMessageId = "__pending__"
+    private let typingIndicatorId = "__typing__"
+    private let bottomAnchorId = "__bottom__"
 
     var body: some View {
         Group {
@@ -25,7 +32,6 @@ struct SessionDetailView: View {
             } else if let error = viewModel.errorMessage {
                 errorView(error)
             } else {
-                // Fallback: auto-retry loading
                 ProgressView("Connecting...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear {
@@ -49,11 +55,8 @@ struct SessionDetailView: View {
                     }
                 }
             }
-
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showTerminal.toggle()
-                } label: {
+                Button { showTerminal.toggle() } label: {
                     Image(systemName: "terminal")
                 }
             }
@@ -66,9 +69,7 @@ struct SessionDetailView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") {
-                                showTerminal = false
-                            }
+                            Button("Done") { showTerminal = false }
                         }
                     }
             }
@@ -77,28 +78,19 @@ struct SessionDetailView: View {
         .onAppear {
             viewModel.setClient(appState.apiClient)
             loadConversation()
-
-            // Listen for terminal data — when Claude finishes responding,
-            // debounce-reload the conversation after data stops flowing
-            appState.tunnel?.onTerminalData = { _ in
-                guard isSending else { return }
-                // Cancel previous reload
-                reloadWorkItem?.cancel()
-                // Schedule reload 2s after last terminal data
-                let item = DispatchWorkItem {
-                    handleSessionEvent()
-                }
-                reloadWorkItem = item
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: item)
-            }
+            setupTerminalDataListener()
+            startWatchingSession()
         }
         .onDisappear {
-            // Clean up terminal data listener
-            appState.tunnel?.onTerminalData = nil
+            appState.tunnel?.onTerminalDataSecondary = nil
+            appState.tunnel?.onSessionChanged = nil
             reloadWorkItem?.cancel()
+            stopWatchingSession()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            keyboardVisible = true
+            if !keyboardVisible {
+                keyboardVisible = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardVisible = false
@@ -122,20 +114,40 @@ struct SessionDetailView: View {
                             MessageBubble(message: message)
                                 .id(message.id)
                         }
+
+                        // Show the user's sent message immediately
+                        if let pending = pendingUserMessage {
+                            pendingMessageBubble(pending)
+                                .id(pendingMessageId)
+                        }
+
+                        // Show typing indicator while waiting for response
+                        if isSending && pendingUserMessage != nil {
+                            typingIndicator
+                                .id(typingIndicatorId)
+                        }
+
+                        // Invisible anchor at the very bottom
+                        Color.clear.frame(height: 1).id(bottomAnchorId)
                     }
                     .padding()
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onAppear {
-                    if let last = detail.recentMessages.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                    // Delay to let LazyVStack finish layout before scrolling
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollToBottom(proxy)
                     }
                 }
+                .onChange(of: viewModel.selectedDetail?.messages.count) {
+                    scrollToBottom(proxy)
+                }
+                .onChange(of: pendingUserMessage) {
+                    scrollToBottom(proxy)
+                }
                 .onChange(of: keyboardVisible) {
-                    if keyboardVisible, let last = detail.recentMessages.last {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
+                    if keyboardVisible {
+                        proxy.scrollTo(bottomAnchorId, anchor: .bottom)
                     }
                 }
             }
@@ -156,9 +168,7 @@ struct SessionDetailView: View {
                     ProgressView()
                         .frame(width: 28, height: 28)
                 } else {
-                    Button {
-                        sendMessage()
-                    } label: {
+                    Button { sendMessage() } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
                             .foregroundStyle(messageText.isEmpty ? .textSecondary : .accentBlue)
@@ -180,81 +190,173 @@ struct SessionDetailView: View {
         }
     }
 
+    // MARK: - Pending Message Bubble
+
+    private func pendingMessageBubble(_ text: String) -> some View {
+        HStack(alignment: .top) {
+            Spacer(minLength: 60)
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.fill")
+                        .font(.caption2)
+                    Text("You")
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(.textSecondary)
+
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(.textPrimary)
+            }
+            .padding(12)
+            .background(Color.accentBlue.opacity(0.2))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // MARK: - Typing Indicator
+
+    private var typingIndicator: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                        .font(.caption2)
+                    Text("Assistant")
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(.textSecondary)
+
+                TypingDots()
+            }
+            .padding(12)
+            .background(Color.bgSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Spacer(minLength: 20)
+        }
+    }
+
+    // MARK: - Scroll
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+    }
+
+    // MARK: - Error View
+
     private func errorView(_ error: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 40))
                 .foregroundStyle(.statusError)
-
             Text("Failed to load session")
                 .font(.headline)
                 .foregroundStyle(.textPrimary)
-
             Text(error)
                 .font(.caption)
                 .foregroundStyle(.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-
-            Button("Retry") {
-                loadConversation()
-            }
-            .buttonStyle(.bordered)
+            Button("Retry") { loadConversation() }
+                .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Send
+    // MARK: - Send (via PTY)
 
     private func sendMessage() {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let tunnel = appState.tunnel else { return }
 
+        pendingUserMessage = text
         isSending = true
-        sendStatus = "Resuming session..."
-        let savedText = text
+        sendStatus = nil
         messageText = ""
 
         Task {
             do {
-                // IMPORTANT: Prepare listener BEFORE sending resume (fixes race condition)
-                tunnel.prepareForReady()
+                // Resume PTY if not yet active
+                if !chatResumed {
+                    chatResumed = true
+                    tunnel.prepareForReady()
+                    let projectPath = viewModel.selectedDetail?.projectPath ?? ""
+                    let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
+                    try tunnel.sendTerminalControl(resume)
 
-                let projectPath = viewModel.selectedDetail?.projectPath ?? ""
-                let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
-                try tunnel.sendTerminalControl(resume)
-
-                sendStatus = "Waiting for session..."
-                let ready = await tunnel.waitForReady(timeout: 15)
-
-                if !ready {
-                    sendStatus = "Session not available. Try opening Terminal."
-                    try? await Task.sleep(for: .seconds(3))
-                    isSending = false
-                    sendStatus = nil
-                    return
+                    let ready = await tunnel.waitForReady(timeout: 15)
+                    if !ready {
+                        sendStatus = "Session not available"
+                        isSending = false
+                        pendingUserMessage = nil
+                        chatResumed = false
+                        return
+                    }
                 }
 
-                // PTY is ready — send the message
-                sendStatus = "Sending to Claude..."
-                try tunnel.sendTerminalInput(savedText + "\r")
-                sendStatus = "Waiting for response..."
-
-                // session:updated event will trigger handleSessionEvent() to refresh
+                // Send message via PTY terminal-input
+                try tunnel.sendTerminalInput(text + "\r")
+                // JSONL watcher will detect the response and trigger reload
             } catch {
                 sendStatus = "Error: \(error.localizedDescription)"
-                try? await Task.sleep(for: .seconds(3))
                 isSending = false
-                sendStatus = nil
+                pendingUserMessage = nil
             }
         }
     }
 
-    /// Called when a session:updated event is received
-    private func handleSessionEvent() {
-        loadConversation()
-        isSending = false
-        sendStatus = nil
+    // MARK: - JSONL Watcher
+
+    private func startWatchingSession() {
+        guard let tunnel = appState.tunnel else { return }
+
+        // Tell server to watch this session's JSONL file
+        let projectHash = self.projectHash
+        let sessionId = self.sessionId
+        try? tunnel.watchSession(projectHash: projectHash, sessionId: sessionId, start: true)
+
+        // When JSONL changes, reload conversation
+        tunnel.onSessionChanged = { ph, sid in
+            guard ph == projectHash && sid == sessionId else { return }
+
+            Task { @MainActor in
+                if let slug, let count = slugPartCount, count > 1 {
+                    await viewModel.loadMergedSession(projectHash: ph, slug: slug)
+                } else {
+                    await viewModel.loadSessionDetail(projectHash: ph, sessionId: sid)
+                }
+
+                // Only clear pending UI when the LAST message is an assistant response
+                // (not when Claude writes the user message echo to JSONL)
+                if isSending,
+                   let lastMsg = viewModel.selectedDetail?.messages.last,
+                   lastMsg.role == .assistant {
+                    isSending = false
+                    sendStatus = nil
+                    pendingUserMessage = nil
+                }
+            }
+        }
+    }
+
+    private func stopWatchingSession() {
+        try? appState.tunnel?.watchSession(projectHash: projectHash, sessionId: sessionId, start: false)
+    }
+
+    // MARK: - Terminal Data Listener
+
+    private func setupTerminalDataListener() {
+        // Terminal data listener only refreshes conversation (for terminal→chat sync)
+        // Does NOT clear isSending — that's handled by JSONL watcher's onSessionChanged
+        appState.tunnel?.onTerminalDataSecondary = { _ in
+            reloadWorkItem?.cancel()
+            let item = DispatchWorkItem {
+                loadConversation()
+            }
+            reloadWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: item)
+        }
     }
 
     // MARK: - Load
@@ -262,15 +364,33 @@ struct SessionDetailView: View {
     private func loadConversation() {
         Task {
             if let slug, let count = slugPartCount, count > 1 {
-                await viewModel.loadMergedSession(
-                    projectHash: projectHash,
-                    slug: slug
-                )
+                await viewModel.loadMergedSession(projectHash: projectHash, slug: slug)
             } else {
-                await viewModel.loadSessionDetail(
-                    projectHash: projectHash,
-                    sessionId: sessionId
-                )
+                await viewModel.loadSessionDetail(projectHash: projectHash, sessionId: sessionId)
+            }
+        }
+    }
+}
+
+// MARK: - Typing Dots Animation
+
+struct TypingDots: View {
+    @State private var phase = 0
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3) { i in
+                Circle()
+                    .fill(Color.textSecondary)
+                    .frame(width: 6, height: 6)
+                    .opacity(phase == i ? 1.0 : 0.3)
+            }
+        }
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    phase = (phase + 1) % 3
+                }
             }
         }
     }

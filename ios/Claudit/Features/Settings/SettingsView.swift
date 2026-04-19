@@ -107,11 +107,6 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    ConnectionIndicator()
-                }
-            }
             .alert("Unpair Device", isPresented: $showUnpairConfirm) {
                 Button("Unpair", role: .destructive) {
                     appState.unpair()

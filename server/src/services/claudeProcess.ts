@@ -1,16 +1,30 @@
-import { spawn, ChildProcess, execSync } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import { EventEmitter } from 'events';
 
-// Resolve claude binary path at startup so spawn can find it
-export const CLAUDE_BIN = (() => {
-  try {
-    return execSync('which claude', { encoding: 'utf-8' }).trim();
-  } catch {
-    return 'claude'; // fallback
+// Find claude binary without execSync (execSync breaks subsequent spawn stdout pipes)
+function findClaudeBin(): string {
+  // Check common locations
+  const home = process.env.HOME || '';
+  const candidates = [
+    `${home}/.local/bin/claude`,
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ];
+  const pathDirs = (process.env.PATH || '').split(':');
+  for (const dir of pathDirs) {
+    candidates.push(`${dir}/claude`);
   }
-})();
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch {}
+  }
+  return 'claude';
+}
+
+export const CLAUDE_BIN = findClaudeBin();
 console.log(`[claude] Binary path: ${CLAUDE_BIN}`);
 
 export class ClaudeProcess extends EventEmitter {
@@ -49,7 +63,7 @@ export class ClaudeProcess extends EventEmitter {
     const cwd = fs.existsSync(this.projectPath) ? this.projectPath : os.homedir();
     console.log(`[claude] Spawning CLI: resume=${this.sessionId} cwd=${cwd}`);
 
-    const proc = spawn(CLAUDE_BIN, [
+    const args = [
       '--resume', this.sessionId,
       '-p',
       '--output-format', 'stream-json',
@@ -57,11 +71,19 @@ export class ClaudeProcess extends EventEmitter {
       '--verbose',
       '--dangerously-skip-permissions',
       ...this.extraArgs,
-    ], {
+    ];
+
+    // Use shell to fully isolate from parent process
+    const cmd = `${CLAUDE_BIN} ${args.map(a => `'${a}'`).join(' ')}`;
+    const proc = spawn('sh', ['-c', cmd], {
       cwd,
-      env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE')),
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE' && k !== 'CLAUDE_CODE_ENTRYPOINT')
+      ),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+
+    console.log(`[claude] proc.pid=${proc.pid} stdout=${!!proc.stdout} stderr=${!!proc.stderr} stdin=${!!proc.stdin}`);
 
     proc.stdout?.on('data', (data: Buffer) => {
       this.processStreamData(data, 'stdout');
@@ -83,8 +105,13 @@ export class ClaudeProcess extends EventEmitter {
   }
 
   start() {
-    this.proc = this._spawnProcess((code) => {
+    const proc = this._spawnProcess((code) => {
       console.log(`[claude] Process exited with code ${code}`);
+      // Only handle if this is still our active process (not replaced by restart)
+      if (this.proc !== proc) {
+        console.log('[claude] Ignoring exit from replaced process');
+        return;
+      }
       this.proc = null;
 
       if (this.userMessageSent) {
@@ -99,12 +126,16 @@ export class ClaudeProcess extends EventEmitter {
         console.log('[claude] Process exited during resume (no pending message)');
       }
     });
+    this.proc = proc;
   }
 
   /** Restart the process and send a message once ready */
   private restart(content: string) {
-    // Kill old process before spawning new one
+    // Kill old process and remove its listeners to prevent stale onClose from emitting events
     if (this.proc) {
+      this.proc.removeAllListeners();
+      this.proc.stdout?.removeAllListeners();
+      this.proc.stderr?.removeAllListeners();
       try { this.proc.kill('SIGKILL'); } catch { /* already dead */ }
       this.proc = null;
     }
@@ -134,6 +165,10 @@ export class ClaudeProcess extends EventEmitter {
     const lines = this[bufferKey].split('\n');
     this[bufferKey] = lines.pop() || '';
 
+    if (lines.length > 0) {
+      console.log(`[claude] ${source}: ${lines.length} lines, first: ${lines[0].substring(0, 80)}`);
+    }
+
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
@@ -155,6 +190,18 @@ export class ClaudeProcess extends EventEmitter {
     switch (event.type) {
       case 'system':
         this.emit('ready');
+        // In -p mode, CLI is ready for input after init — no resume replay
+        if (!this.resumeReady && !this.userMessageSent) {
+          console.log('[claude] Init received, marking resume ready (no replay in -p mode)');
+          this.resumeReady = true;
+          // Flush pending message
+          if (this.pendingMessage) {
+            const pending = this.pendingMessage;
+            this.pendingMessage = null;
+            console.log(`[claude] Flushing pending message after init: ${pending.slice(0, 100)}`);
+            this._doSendMessage(pending);
+          }
+        }
         break;
 
       case 'assistant': {
@@ -233,19 +280,16 @@ export class ClaudeProcess extends EventEmitter {
   }
 
   sendMessage(content: string) {
-    if (!this.proc?.stdin?.writable) {
-      console.log('[claude] Process not running, restarting for message...');
+    // Check if process is actually alive
+    if (!this.proc || this.proc.exitCode !== null || !this.proc.stdin?.writable) {
+      console.log(`[claude] Process not running, restarting for message...`);
+      this.proc = null;
       this.restart(content);
       return;
     }
 
-    // If CLI is still resuming (no result yet), queue message for later
-    if (!this.userMessageSent && !this.resumeReady) {
-      console.log(`[claude] CLI still resuming, queuing message: ${content.slice(0, 100)}`);
-      this.pendingMessage = content;
-      return;
-    }
-
+    // In -p --input-format stream-json mode, CLI waits for stdin before outputting init.
+    // Don't queue — send directly. The CLI will output init + response together.
     this._doSendMessage(content);
   }
 

@@ -80,7 +80,25 @@ final class APIClient {
         projectHash: String,
         sessionId: String
     ) async throws -> SessionDetail {
-        return try await request("GET", "/api/sessions/\(projectHash)/\(sessionId)")
+        // Use raw request to truncate messages before full decode
+        var bodyJSON: String? = nil
+        let response = try await tunnel.apiRequest(method: "GET", path: "/api/sessions/\(projectHash)/\(sessionId)", body: bodyJSON)
+        guard response.status >= 200 && response.status < 300 else {
+            throw TunnelError.serverError(response.status, response.body)
+        }
+        guard var responseData = response.body.data(using: .utf8) else {
+            throw APIError.invalidResponse
+        }
+
+        // Truncate messages array in raw JSON to last 100 for faster decode
+        if responseData.count > 100_000,
+           var obj = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+           let messages = obj["messages"] as? [[String: Any]], messages.count > 100 {
+            obj["messages"] = Array(messages.suffix(100))
+            responseData = try JSONSerialization.data(withJSONObject: obj)
+        }
+
+        return try decoder.decode(SessionDetail.self, from: responseData)
     }
 
     func fetchMergedSession(

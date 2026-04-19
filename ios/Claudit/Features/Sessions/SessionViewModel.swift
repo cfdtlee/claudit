@@ -45,7 +45,12 @@ final class SessionViewModel {
             return
         }
 
-        isLoadingDetail = true
+        // Only show loading spinner on INITIAL load, not on refresh
+        // This prevents view rebuild which would dismiss the keyboard
+        let isInitialLoad = selectedDetail == nil
+        if isInitialLoad {
+            isLoadingDetail = true
+        }
 
         do {
             print("[SessionVM] Loading detail: \(projectHash)/\(sessionId)")
@@ -56,23 +61,27 @@ final class SessionViewModel {
             print("[SessionVM] Loaded \(selectedDetail?.messages.count ?? 0) messages")
         } catch {
             print("[SessionVM] Error loading detail: \(error)")
-            errorMessage = error.localizedDescription
+            if isInitialLoad {
+                errorMessage = error.localizedDescription
+            }
         }
 
-        isLoadingDetail = false
+        if isInitialLoad {
+            isLoadingDetail = false
+        }
     }
 
     func loadMergedSession(projectHash: String, slug: String) async {
         guard let client = apiClient else { return }
 
-        isLoadingDetail = true
+        let isInitialLoad = selectedDetail == nil
+        if isInitialLoad { isLoadingDetail = true }
 
         do {
             let merged = try await client.fetchMergedSession(
                 projectHash: projectHash,
                 slug: slug
             )
-            // Convert to SessionDetail for display
             selectedDetail = SessionDetail(
                 sessionId: merged.latestSessionId,
                 projectPath: merged.projectPath,
@@ -80,10 +89,10 @@ final class SessionViewModel {
                 slug: merged.slug
             )
         } catch {
-            errorMessage = error.localizedDescription
+            if isInitialLoad { errorMessage = error.localizedDescription }
         }
 
-        isLoadingDetail = false
+        if isInitialLoad { isLoadingDetail = false }
     }
 
     func pinSession(_ sessionId: String, pinned: Bool) async {

@@ -181,38 +181,77 @@ final class TerminalViewModel {
         var i = 0
 
         while i < chars.count {
-            if chars[i] == "\u{1B}" && i + 1 < chars.count && chars[i + 1] == "[" {
+            // ESC sequence
+            if chars[i] == "\u{1B}" && i + 1 < chars.count {
                 // Flush buffer
                 if !buffer.isEmpty {
                     segments.append(TerminalSegment(text: buffer, foreground: currentColor, bold: currentBold))
                     buffer = ""
                 }
 
-                // Parse escape sequence
-                i += 2
-                var codeStr = ""
-                while i < chars.count && chars[i] != "m" {
-                    codeStr.append(chars[i])
-                    i += 1
-                }
-                i += 1 // skip 'm'
+                let next = chars[i + 1]
 
-                let codes = codeStr.split(separator: ";").compactMap { Int($0) }
-                for code in codes {
-                    switch code {
-                    case 0:
-                        currentColor = .terminalGreen
-                        currentBold = false
-                    case 1:
-                        currentBold = true
-                    case 30...37, 90...97:
-                        if let ansi = ANSIColor(rawValue: code) {
-                            currentColor = ansi.color
+                if next == "[" {
+                    // CSI sequence: ESC [ ... <final byte>
+                    i += 2
+                    var codeStr = ""
+                    // Read parameter bytes (0x30-0x3F) and intermediate bytes (0x20-0x2F)
+                    while i < chars.count {
+                        let c = chars[i]
+                        if c >= "\u{40}" && c <= "\u{7E}" {
+                            // Final byte — determines the sequence type
+                            break
                         }
-                    default:
-                        break
+                        codeStr.append(c)
+                        i += 1
                     }
+
+                    if i < chars.count {
+                        let finalByte = chars[i]
+                        i += 1
+
+                        // Only process SGR (m) sequences for color/style
+                        if finalByte == "m" {
+                            let codes = codeStr.split(separator: ";").compactMap { Int($0) }
+                            for code in codes {
+                                switch code {
+                                case 0:
+                                    currentColor = .terminalGreen
+                                    currentBold = false
+                                case 1:
+                                    currentBold = true
+                                case 30...37, 90...97:
+                                    if let ansi = ANSIColor(rawValue: code) {
+                                        currentColor = ansi.color
+                                    }
+                                default:
+                                    break
+                                }
+                            }
+                        }
+                        // All other CSI sequences (cursor, clear, scroll, etc.) are silently skipped
+                    }
+                } else if next == "]" {
+                    // OSC sequence: ESC ] ... BEL or ST
+                    i += 2
+                    while i < chars.count && chars[i] != "\u{07}" && chars[i] != "\u{1B}" {
+                        i += 1
+                    }
+                    if i < chars.count && chars[i] == "\u{07}" { i += 1 }
+                    else if i + 1 < chars.count && chars[i] == "\u{1B}" && chars[i+1] == "\\" { i += 2 }
+                } else if next == "(" || next == ")" {
+                    // Character set designation — skip 3 bytes total
+                    i += 3
+                } else {
+                    // Other 2-byte ESC sequences — skip
+                    i += 2
                 }
+            } else if chars[i] == "\r" {
+                // Carriage return — skip (we handle \n for newlines)
+                i += 1
+            } else if chars[i].asciiValue ?? 0 < 32 && chars[i] != "\n" && chars[i] != "\t" {
+                // Skip other control characters
+                i += 1
             } else {
                 buffer.append(chars[i])
                 i += 1

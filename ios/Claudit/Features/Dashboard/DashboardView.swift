@@ -16,11 +16,6 @@ struct DashboardView: View {
                 }
             }
             .navigationTitle("Dashboard")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    ConnectionIndicator()
-                }
-            }
             .refreshable {
                 await viewModel.loadDashboard()
             }

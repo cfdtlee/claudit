@@ -207,7 +207,12 @@ wss.on('connection', (ws: WebSocket) => {
           safeSend({ type: 'error', message: 'No active session. Send "resume" first.' });
           return;
         }
-        claude.sendMessage(msg.content);
+        try {
+          claude.sendMessage(msg.content);
+        } catch (err: any) {
+          console.error(`[ws] sendMessage threw: ${err.message}`);
+          safeSend({ type: 'error', message: err.message });
+        }
         break;
       }
 
@@ -221,12 +226,16 @@ wss.on('connection', (ws: WebSocket) => {
     }
   });
 
-  ws.on('close', () => {
-    console.log('[ws] Client disconnected');
+  ws.on('close', (code: number, reason: Buffer) => {
+    console.log(`[ws] Client disconnected code=${code} reason=${reason.toString()}`);
     if (claude) {
       claude.stop();
       claude = null;
     }
+  });
+
+  ws.on('error', (err: Error) => {
+    console.error(`[ws] Client error: ${err.message}`);
   });
 });
 

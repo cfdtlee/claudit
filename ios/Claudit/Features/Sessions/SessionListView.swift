@@ -3,6 +3,7 @@ import SwiftUI
 struct SessionListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = SessionViewModel()
+    @State private var collapsedGroups: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -23,11 +24,6 @@ struct SessionListView: View {
             .refreshable {
                 await viewModel.loadSessions()
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    ConnectionIndicator()
-                }
-            }
             .background(Color.bgPrimary)
             .onAppear {
                 viewModel.setClient(appState.apiClient)
@@ -44,80 +40,152 @@ struct SessionListView: View {
         }
     }
 
+    // MARK: - Pinned Sessions
+
+    private var pinnedSessions: [(group: ProjectGroup, session: SessionSummary)] {
+        viewModel.groups.flatMap { group in
+            group.sessions
+                .filter { $0.pinned == true }
+                .map { (group: group, session: $0) }
+        }
+    }
+
     // MARK: - Session List
 
     private var sessionList: some View {
         List {
-            ForEach(viewModel.groups) { group in
+            // Pinned Sessions folder
+            if !pinnedSessions.isEmpty {
                 Section {
-                    ForEach(group.sessions) { session in
-                        NavigationLink {
-                            SessionDetailView(
-                                projectHash: group.projectHash,
-                                sessionId: session.sessionId,
-                                slug: session.slug,
-                                slugPartCount: session.slugPartCount
-                            )
-                        } label: {
-                            SessionRow(
-                                session: session,
-                                timeAgo: viewModel.timeAgo(from: session.timestamp)
-                            )
-                        }
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                Task {
-                                    await viewModel.pinSession(
-                                        session.sessionId,
-                                        pinned: !(session.pinned ?? false)
-                                    )
-                                }
+                    if !collapsedGroups.contains("__pinned__") {
+                        ForEach(pinnedSessions, id: \.session.sessionId) { item in
+                            NavigationLink {
+                                SessionDetailView(
+                                    projectHash: item.group.projectHash,
+                                    sessionId: item.session.sessionId,
+                                    slug: item.session.slug,
+                                    slugPartCount: item.session.slugPartCount
+                                )
                             } label: {
-                                Label(
-                                    session.pinned == true ? "Unpin" : "Pin",
-                                    systemImage: session.pinned == true ? "pin.slash" : "pin"
+                                SessionRow(
+                                    session: item.session,
+                                    timeAgo: viewModel.timeAgo(from: item.session.timestamp)
                                 )
                             }
-                            .tint(.orange)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                Task {
-                                    await viewModel.deleteSession(
-                                        projectHash: group.projectHash,
-                                        sessionId: session.sessionId
-                                    )
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-
-                            Button {
-                                Task {
-                                    await viewModel.archiveSession(session.sessionId)
-                                }
-                            } label: {
-                                Label("Archive", systemImage: "archivebox")
-                            }
-                            .tint(.gray)
                         }
                     }
                 } header: {
-                    HStack {
-                        Image(systemName: "folder")
-                            .font(.caption)
-                        Text(viewModel.projectName(for: group))
-                            .font(.caption.bold())
-                        Spacer()
-                        Text("\(group.sessions.count)")
-                            .font(.caption2)
-                            .foregroundStyle(.textSecondary)
+                    folderHeader(
+                        icon: "pin.fill",
+                        iconColor: .orange,
+                        name: "Pinned",
+                        count: pinnedSessions.count,
+                        groupId: "__pinned__"
+                    )
+                }
+            }
+
+            // Project folders
+            ForEach(viewModel.groups) { group in
+                Section {
+                    if !collapsedGroups.contains(group.projectHash) {
+                        ForEach(group.sessions) { session in
+                            NavigationLink {
+                                SessionDetailView(
+                                    projectHash: group.projectHash,
+                                    sessionId: session.sessionId,
+                                    slug: session.slug,
+                                    slugPartCount: session.slugPartCount
+                                )
+                            } label: {
+                                SessionRow(
+                                    session: session,
+                                    timeAgo: viewModel.timeAgo(from: session.timestamp)
+                                )
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    Task {
+                                        await viewModel.pinSession(
+                                            session.sessionId,
+                                            pinned: !(session.pinned ?? false)
+                                        )
+                                    }
+                                } label: {
+                                    Label(
+                                        session.pinned == true ? "Unpin" : "Pin",
+                                        systemImage: session.pinned == true ? "pin.slash" : "pin"
+                                    )
+                                }
+                                .tint(.orange)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task {
+                                        await viewModel.deleteSession(
+                                            projectHash: group.projectHash,
+                                            sessionId: session.sessionId
+                                        )
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+
+                                Button {
+                                    Task {
+                                        await viewModel.archiveSession(session.sessionId)
+                                    }
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
+                                }
+                                .tint(.gray)
+                            }
+                        }
                     }
-                    .foregroundStyle(.textSecondary)
+                } header: {
+                    folderHeader(
+                        icon: "folder",
+                        iconColor: .textSecondary,
+                        name: viewModel.projectName(for: group),
+                        count: group.sessions.count,
+                        groupId: group.projectHash
+                    )
                 }
             }
         }
         .listStyle(.insetGrouped)
+    }
+
+    // MARK: - Folder Header (tappable to collapse/expand)
+
+    private func folderHeader(icon: String, iconColor: Color, name: String, count: Int, groupId: String) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if collapsedGroups.contains(groupId) {
+                    collapsedGroups.remove(groupId)
+                } else {
+                    collapsedGroups.insert(groupId)
+                }
+            }
+        } label: {
+            HStack {
+                Image(systemName: collapsedGroups.contains(groupId) ? "chevron.right" : "chevron.down")
+                    .font(.caption2)
+                    .frame(width: 12)
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(iconColor)
+                Text(name)
+                    .font(.caption.bold())
+                Spacer()
+                Text("\(count)")
+                    .font(.caption2)
+                    .foregroundStyle(.textSecondary)
+            }
+            .foregroundStyle(.textSecondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Empty / Loading
@@ -172,7 +240,6 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Status indicator
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
@@ -227,12 +294,8 @@ struct SessionRow: View {
     }
 
     private var displayTitle: String {
-        if let name = session.displayName, !name.isEmpty {
-            return name
-        }
-        if let slug = session.slug, !slug.isEmpty {
-            return slug
-        }
+        if let name = session.displayName, !name.isEmpty { return name }
+        if let slug = session.slug, !slug.isEmpty { return slug }
         return String(session.sessionId.prefix(8))
     }
 

@@ -11,11 +11,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.6"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0"),
     ],
     targets: [
         .target(
             name: "Claudit",
-            dependencies: ["Starscream"],
+            dependencies: ["Starscream", "SwiftTerm"],
             path: "Claudit"
         ),
     ]

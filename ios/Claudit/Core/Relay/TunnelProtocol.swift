@@ -8,6 +8,7 @@ enum TunnelChannel: String, Codable {
     case terminalControl = "terminal-control"
     case events
     case chat
+    case watch
 }
 
 /// Envelope format for tunnel messages.
@@ -38,11 +39,21 @@ final class TunnelProtocol {
     private var pendingRequests: [String: CheckedContinuation<TunnelAPIResponse, Error>] = [:]
     private let requestLock = NSLock()
 
-    /// Event handler for terminal data.
+    /// Primary terminal data handler (SwiftTerm feed).
     var onTerminalData: ((Data) -> Void)?
+
+    /// Secondary terminal data handler (conversation refresh debounce).
+    /// Both fire simultaneously — no overwriting.
+    var onTerminalDataSecondary: ((Data) -> Void)?
 
     /// Event handler for server-sent events.
     var onEvent: ((String) -> Void)?
+
+    /// Chat message handler (streaming Claude responses).
+    var onChatMessage: ((String) -> Void)?
+
+    /// Session JSONL change handler (for real-time chat refresh).
+    var onSessionChanged: ((String, String) -> Void)?  // (projectHash, sessionId)
 
     /// Reference to the relay client for sending.
     weak var relayClient: RelayClient?
@@ -140,6 +151,25 @@ final class TunnelProtocol {
         try sendEnvelope(envelope)
     }
 
+    /// Send a chat message (resume/message/stop) through the tunnel.
+    func sendChat(_ message: String) throws {
+        let envelope = TunnelEnvelope(channel: .chat, requestId: nil, payload: message)
+        try sendEnvelope(envelope)
+    }
+
+    /// Start/stop watching a session's JSONL file for changes.
+    func watchSession(projectHash: String, sessionId: String, start: Bool) throws {
+        let msg: [String: String] = [
+            "action": start ? "start" : "stop",
+            "projectHash": projectHash,
+            "sessionId": sessionId
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: msg),
+              let text = String(data: data, encoding: .utf8) else { return }
+        let envelope = TunnelEnvelope(channel: .watch, requestId: nil, payload: text)
+        try sendEnvelope(envelope)
+    }
+
     func sendTerminalControl(_ message: String) throws {
         let envelope = TunnelEnvelope(channel: .terminalControl, requestId: nil, payload: message)
         try sendEnvelope(envelope)
@@ -174,6 +204,7 @@ final class TunnelProtocol {
             }
             if let termData = envelope.payload.data(using: .utf8) {
                 onTerminalData?(termData)
+                onTerminalDataSecondary?(termData)
             }
 
         case .terminalInput:
@@ -183,7 +214,16 @@ final class TunnelProtocol {
             onEvent?(envelope.payload)
 
         case .chat:
-            break
+            onChatMessage?(envelope.payload)
+
+        case .watch:
+            // JSONL file changed — parse projectHash/sessionId and notify
+            if let data = envelope.payload.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let ph = json["projectHash"] as? String,
+               let sid = json["sessionId"] as? String {
+                onSessionChanged?(ph, sid)
+            }
         }
     }
 

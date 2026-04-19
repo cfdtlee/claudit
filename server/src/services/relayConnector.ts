@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import http from 'http';
 import { encrypt, decrypt } from './relayCrypto.js';
+import { getWatcher, stopWatcher } from './jsonlWatcher.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,7 @@ function handleControlMessage(text: string): void {
   switch (msg.channel) {
     case 'api': handleApiRequest(msg); break;
     case 'chat': proxyChatMessage(msg); break;
+    case 'watch': handleWatchSession(msg); break;
     case 'terminal-input':
     case 'terminal-control': forwardToPtyWs(msg); break;
   }
@@ -338,17 +340,61 @@ function handleApiRequest(msg: {
 
 // ── Chat proxying ──────────────────────────────────────────────────────────────
 
+// Active chat WebSocket connections keyed by sessionId
+const chatConnections = new Map<string, WebSocket>();
+
 function proxyChatMessage(msg: any): void {
+  const inner = JSON.parse(msg.payload || '{}');
   const port = getLocalPort();
-  const localWs = new WebSocket(`ws://127.0.0.1:${port}/ws/chat`);
-  localWs.on('open', () => {
-    const payload = { ...msg }; delete payload.channel;
-    localWs.send(JSON.stringify(payload));
-  });
-  localWs.on('message', (data: Buffer) => {
-    sendEncrypted(controlWs, { channel: 'chat', ...JSON.parse(data.toString()) });
-  });
-  localWs.on('error', (err) => console.error('[relay] Chat proxy error:', err.message));
+
+  // For 'resume', create or reuse a persistent chat connection
+  if (inner.type === 'resume') {
+    const sessionId = inner.sessionId;
+
+    // Reuse existing connection if alive
+    const existing = chatConnections.get(sessionId);
+    if (existing && existing.readyState === WebSocket.OPEN) {
+      console.log(`[relay] Reusing existing chat WS for session ${sessionId.substring(0, 8)}`);
+      existing.send(JSON.stringify(inner));
+      return;
+    }
+
+    const localWs = new WebSocket(`ws://127.0.0.1:${port}/ws/chat`);
+    chatConnections.set(sessionId, localWs);
+
+    localWs.on('open', () => {
+      console.log(`[relay] Chat WS connected for session ${sessionId.substring(0, 8)}`);
+      localWs.send(JSON.stringify(inner));
+    });
+    localWs.on('message', (data: Buffer) => {
+      sendEncrypted(controlWs, {
+        channel: 'chat',
+        requestId: null,
+        payload: data.toString(),
+      });
+    });
+    localWs.on('close', () => {
+      console.log(`[relay] Chat WS closed for session ${sessionId.substring(0, 8)}`);
+      chatConnections.delete(sessionId);
+    });
+    localWs.on('error', (err) => {
+      console.error('[relay] Chat proxy error:', err.message);
+      chatConnections.delete(sessionId);
+    });
+    return;
+  }
+
+  // For 'message' and 'stop', send to existing connection
+  if (inner.type === 'message' || inner.type === 'stop') {
+    // Find active chat connection
+    for (const [, ws] of chatConnections) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(inner));
+        return;
+      }
+    }
+    console.warn('[relay] No active chat connection for message');
+  }
 }
 
 // ── PTY proxying ───────────────────────────────────────────────────────────────
@@ -390,6 +436,36 @@ function forwardToPtyWs(msg: any): void {
   console.log(`[relay] Forwarding to local PTY (${msg.channel}): ${data.substring(0, 80)}`);
   if (ws.readyState === WebSocket.OPEN) ws.send(data);
   else ws.once('open', () => ws.send(data));
+}
+
+// ── JSONL Watch proxying ───────────────────────────────────────────────────────
+
+function handleWatchSession(msg: any): void {
+  const inner = JSON.parse(msg.payload || '{}');
+
+  if (inner.action === 'start' && inner.projectHash && inner.sessionId) {
+    const watcher = getWatcher(inner.projectHash, inner.sessionId);
+
+    // Remove old listener if any, then add new one
+    watcher.removeAllListeners('change');
+    watcher.on('change', () => {
+      console.log(`[relay] JSONL change detected for ${inner.sessionId.substring(0, 8)}`);
+      sendEncrypted(controlWs, {
+        channel: 'watch',
+        requestId: null,
+        payload: JSON.stringify({
+          type: 'session_changed',
+          sessionId: inner.sessionId,
+          projectHash: inner.projectHash,
+        }),
+      });
+    });
+
+    console.log(`[relay] Watching JSONL for session ${inner.sessionId.substring(0, 8)}`);
+  } else if (inner.action === 'stop' && inner.projectHash && inner.sessionId) {
+    stopWatcher(inner.projectHash, inner.sessionId);
+    console.log(`[relay] Stopped watching JSONL for ${inner.sessionId.substring(0, 8)}`);
+  }
 }
 
 // ── Events proxying ────────────────────────────────────────────────────────────

@@ -22,19 +22,6 @@ struct TaskListView: View {
                 }
             }
             .navigationTitle("Tasks")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        viewModel.showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-
-                ToolbarItem(placement: .topBarLeading) {
-                    ConnectionIndicator()
-                }
-            }
             .refreshable {
                 await viewModel.loadTasks()
             }

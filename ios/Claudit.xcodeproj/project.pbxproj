@@ -17,6 +17,7 @@
 		5C64D4FF09B65CB3137A6A2B /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = C47656541F5FFC4FF8A52177 /* Starscream */; };
 		5EC8A7B84F50A8889DA1F23E /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74D40DD9F2CF5481655170B /* ConnectionIndicator.swift */; };
 		68F5433D16910984A01E7DA2 /* ClauditApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68ED6D20A4BDF4C6A289F59 /* ClauditApp.swift */; };
+		71FC6C83C5527EEFB6427D7D /* ChatClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE8EDCA49C68B939AD6729B9 /* ChatClient.swift */; };
 		76CE734AB01C9B15D1F5963F /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E34B2F04F75190C32B0CC749 /* TaskDetailView.swift */; };
 		7EEB77943B6EDB9B37C9F356 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A4D90D8089104D39DC3FCE /* AppState.swift */; };
 		7FF266B694F4B416B78791BA /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E893F1E8DDC14CB35B0330D /* RelayClient.swift */; };
@@ -29,6 +30,7 @@
 		BEDFA6FD2658B62E6FDAA9CC /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C502938836C490D113307E3D /* SessionViewModel.swift */; };
 		CCBFA7EE39981F87E7C20AB7 /* Crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695AA8EB15773190ED501955 /* Crypto.swift */; };
 		D0A73D5ADEC4B6331CC52D5B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6235D4C591AEA619AB3F61A /* SettingsView.swift */; };
+		D0D70DA4B6B37C8884EBCE1E /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 41785FD478954F9C3A77A9CF /* SwiftTerm */; };
 		D95B4CE3C4EA3FA442802A74 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C002A35B0AFF7CBFD16B0F8 /* Preferences.swift */; };
 		DBB02C868E34B564E4F0C000 /* TunnelProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54974C4AD826CBE6F0CB6CC1 /* TunnelProtocol.swift */; };
 		DBB5A901D0BC4D837043C766 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9DF66F43C4E9E7B4A637DF /* Colors.swift */; };
@@ -61,6 +63,7 @@
 		C502938836C490D113307E3D /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
 		C8317A7B0F053201590A5B82 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D62D44534654C4B68F71AB32 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		DE8EDCA49C68B939AD6729B9 /* ChatClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatClient.swift; sourceTree = "<group>"; };
 		E34B2F04F75190C32B0CC749 /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		E3545D7091C4B2D74A1AB3D1 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		E68ED6D20A4BDF4C6A289F59 /* ClauditApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClauditApp.swift; sourceTree = "<group>"; };
@@ -75,6 +78,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5C64D4FF09B65CB3137A6A2B /* Starscream in Frameworks */,
+				D0D70DA4B6B37C8884EBCE1E /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,6 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				4AB4FCE6D81667175869647C /* APIClient.swift */,
+				DE8EDCA49C68B939AD6729B9 /* ChatClient.swift */,
 				9901C4AED83F2EF06535CB45 /* Models.swift */,
 			);
 			path = API;
@@ -253,6 +258,7 @@
 			name = Claudit;
 			packageProductDependencies = (
 				C47656541F5FFC4FF8A52177 /* Starscream */,
+				41785FD478954F9C3A77A9CF /* SwiftTerm */,
 			);
 			productName = Claudit;
 			productReference = B2A2B024A32D6BB42DF422AC /* Claudit.app */;
@@ -279,6 +285,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				8EA2EE6FEA679DC3B15A16EF /* XCRemoteSwiftPackageReference "Starscream" */,
+				F577A9293268FDBEC98622C3 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -295,6 +302,7 @@
 			files = (
 				AAC5E0C4EBB7AECA314B79C0 /* APIClient.swift in Sources */,
 				7EEB77943B6EDB9B37C9F356 /* AppState.swift in Sources */,
+				71FC6C83C5527EEFB6427D7D /* ChatClient.swift in Sources */,
 				68F5433D16910984A01E7DA2 /* ClauditApp.swift in Sources */,
 				DBB5A901D0BC4D837043C766 /* Colors.swift in Sources */,
 				5EC8A7B84F50A8889DA1F23E /* ConnectionIndicator.swift in Sources */,
@@ -517,9 +525,22 @@
 				minimumVersion = 4.0.6;
 			};
 		};
+		F577A9293268FDBEC98622C3 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.13.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		41785FD478954F9C3A77A9CF /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F577A9293268FDBEC98622C3 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
 		C47656541F5FFC4FF8A52177 /* Starscream */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 8EA2EE6FEA679DC3B15A16EF /* XCRemoteSwiftPackageReference "Starscream" */;
