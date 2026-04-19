@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import QRCode from 'qrcode';
-import { generateKeyPair, keyToBase64Url } from '../services/relayCrypto.js';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { generateKeyPair, keyToBase64Url, keyFromBase64Url } from '../services/relayCrypto.js';
 import {
   startRelay,
   stopRelay,
@@ -9,6 +12,54 @@ import {
 } from '../services/relayConnector.js';
 
 const router = Router();
+
+// ── Persistence ─────────────────────────────────────────────────────────────
+
+const CLAUDIT_DIR = path.join(os.homedir(), '.claudit');
+const RELAY_CONFIG_FILE = path.join(CLAUDIT_DIR, 'relay.json');
+
+interface PersistedRelayConfig {
+  relayUrl: string;
+  pairingId: string;
+  secretKeyBase64: string;
+}
+
+function saveRelayConfig(cfg: PersistedRelayConfig): void {
+  try {
+    if (!fs.existsSync(CLAUDIT_DIR)) fs.mkdirSync(CLAUDIT_DIR, { recursive: true });
+    fs.writeFileSync(RELAY_CONFIG_FILE, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    console.log('[relay] Pairing credentials saved to', RELAY_CONFIG_FILE);
+  } catch (err: any) {
+    console.error('[relay] Failed to save config:', err.message);
+  }
+}
+
+function loadRelayConfig(): PersistedRelayConfig | null {
+  try {
+    if (!fs.existsSync(RELAY_CONFIG_FILE)) return null;
+    const data = fs.readFileSync(RELAY_CONFIG_FILE, 'utf-8');
+    const cfg = JSON.parse(data);
+    if (cfg.relayUrl && cfg.pairingId && cfg.secretKeyBase64) return cfg;
+  } catch {}
+  return null;
+}
+
+function deleteRelayConfig(): void {
+  try {
+    if (fs.existsSync(RELAY_CONFIG_FILE)) fs.unlinkSync(RELAY_CONFIG_FILE);
+  } catch {}
+}
+
+// ── Auto-connect on startup ─────────────────────────────────────────────────
+
+const saved = loadRelayConfig();
+if (saved) {
+  console.log('[relay] Found saved pairing, auto-connecting...');
+  const secretKey = keyFromBase64Url(saved.secretKeyBase64);
+  startRelay({ relayUrl: saved.relayUrl, pairingId: saved.pairingId, secretKey });
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildQrData(relayUrl: string, pairingId: string, keyBase64: string): string {
   let relayHost: string;
@@ -21,18 +72,38 @@ function buildQrData(relayUrl: string, pairingId: string, keyBase64: string): st
   return `claudit://${relayHost}/${pairingId}#${keyBase64}`;
 }
 
-// POST /api/relay/start — Start relay connection
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+// POST /api/relay/start — Start relay (generates new pairing if no saved config)
 router.post('/start', (req, res) => {
   try {
-    const { relayUrl } = req.body;
+    const { relayUrl, fresh } = req.body;
     if (!relayUrl || typeof relayUrl !== 'string') {
       return res.status(400).json({ error: 'relayUrl is required' });
     }
 
-    const { pairingId, secretKey } = generateKeyPair();
+    let pairingId: string;
+    let secretKey: Uint8Array;
+    let keyBase64: string;
+
+    // Reuse saved credentials unless 'fresh' is requested
+    const saved = !fresh ? loadRelayConfig() : null;
+    if (saved && saved.relayUrl === relayUrl) {
+      pairingId = saved.pairingId;
+      secretKey = keyFromBase64Url(saved.secretKeyBase64);
+      keyBase64 = saved.secretKeyBase64;
+      console.log('[relay] Reusing saved pairing credentials');
+    } else {
+      const pair = generateKeyPair();
+      pairingId = pair.pairingId;
+      secretKey = pair.secretKey;
+      keyBase64 = keyToBase64Url(secretKey);
+      // Persist new credentials
+      saveRelayConfig({ relayUrl, pairingId, secretKeyBase64: keyBase64 });
+    }
+
     startRelay({ relayUrl, pairingId, secretKey });
 
-    const keyBase64 = keyToBase64Url(secretKey);
     res.json({
       status: 'connecting',
       pairingId,
@@ -49,6 +120,13 @@ router.post('/stop', (_req, res) => {
   res.json({ status: 'disconnected' });
 });
 
+// POST /api/relay/unpair — Stop and delete saved credentials
+router.post('/unpair', (_req, res) => {
+  stopRelay();
+  deleteRelayConfig();
+  res.json({ status: 'unpaired' });
+});
+
 // GET /api/relay/status
 router.get('/status', (_req, res) => {
   const status = getRelayStatus();
@@ -56,43 +134,37 @@ router.get('/status', (_req, res) => {
   res.json({ ...status, pairing });
 });
 
-// GET /api/relay/qr — QR code as SVG image (scannable)
+// GET /api/relay/qr — QR code as SVG
 router.get('/qr', async (_req, res) => {
   try {
     const pairing = getPairingInfo();
-    if (!pairing) {
-      return res.status(404).json({ error: 'Relay not active. Start relay first.' });
-    }
+    if (!pairing) return res.status(404).json({ error: 'Relay not active. Start relay first.' });
 
     const qrData = buildQrData(pairing.relayUrl, pairing.pairingId, pairing.secretKeyBase64);
     const svg = await QRCode.toString(qrData, { type: 'svg', margin: 2, width: 300 });
-
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(svg);
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to generate QR code' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/relay/qr.png — QR code as PNG image
+// GET /api/relay/qr.png — QR code as PNG
 router.get('/qr.png', async (_req, res) => {
   try {
     const pairing = getPairingInfo();
-    if (!pairing) {
-      return res.status(404).json({ error: 'Relay not active. Start relay first.' });
-    }
+    if (!pairing) return res.status(404).json({ error: 'Relay not active. Start relay first.' });
 
     const qrData = buildQrData(pairing.relayUrl, pairing.pairingId, pairing.secretKeyBase64);
     const buffer = await QRCode.toBuffer(qrData, { type: 'png', margin: 2, width: 300 });
-
     res.setHeader('Content-Type', 'image/png');
     res.send(buffer);
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to generate QR code' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/relay/pair — Pairing page with QR code (HTML)
+// GET /api/relay/pair — Pairing page with QR code
 router.get('/pair', async (_req, res) => {
   const pairing = getPairingInfo();
   if (!pairing) {

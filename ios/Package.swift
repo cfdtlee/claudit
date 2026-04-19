@@ -9,9 +9,13 @@ let package = Package(
     products: [
         .library(name: "Claudit", targets: ["Claudit"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.6"),
+    ],
     targets: [
         .target(
             name: "Claudit",
+            dependencies: ["Starscream"],
             path: "Claudit"
         ),
     ]

@@ -4,7 +4,7 @@ import { fetchSettings, updateSettings } from '../../api/settings';
 import { cn } from '../../lib/utils';
 import {
   Settings, Bell, AlertTriangle, Save, Loader2, CheckCircle2, Trash2,
-  Monitor, Shield, Timer,
+  Monitor, Shield, Timer, Smartphone, Power, PowerOff, RefreshCw, QrCode,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -48,7 +48,7 @@ export default function SettingsPage() {
   const labelCls = 'block text-sm font-medium text-foreground mb-1.5';
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto" id="settings-page">
       <div className="max-w-2xl mx-auto p-8 space-y-8">
         {/* Header */}
         <div>
@@ -133,6 +133,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Remote Connection */}
+        <RemoteConnectionSection />
+
         {/* Automation */}
         <div className="rounded-xl border border-border bg-card p-6">
           <div className="flex items-center gap-2 mb-5">
@@ -210,6 +213,198 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Remote Connection Section ────────────────────────────────────────────────
+
+interface RelayStatus {
+  state: string;
+  relayUrl: string | null;
+  pairingId: string | null;
+  connectedSince: number | null;
+  reconnectAttempts: number;
+  pairing: { pairingId: string; relayUrl: string; secretKeyBase64: string } | null;
+}
+
+function RemoteConnectionSection() {
+  const [showQR, setShowQR] = useState(false);
+  const [status, setStatus] = useState<RelayStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [relayUrl, setRelayUrl] = useState('wss://claudit-relay.fly.dev');
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch('/api/relay/status');
+      const data = await res.json();
+      setStatus(data);
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    const timer = setInterval(fetchStatus, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleStart = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/relay/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relayUrl }),
+      });
+      await fetchStatus();
+      setShowQR(true);
+    } catch {}
+    setLoading(false);
+  };
+
+  const handleStop = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/relay/stop', { method: 'POST' });
+      await fetchStatus();
+      setShowQR(false);
+    } catch {}
+    setLoading(false);
+  };
+
+  const handleUnpair = async () => {
+    if (!confirm('Unpair will delete saved credentials. iOS app will need to scan a new QR code.')) return;
+    setLoading(true);
+    try {
+      await fetch('/api/relay/unpair', { method: 'POST' });
+      await fetchStatus();
+      setShowQR(false);
+    } catch {}
+    setLoading(false);
+  };
+
+  const isConnected = status?.state === 'connected';
+  const isActive = status?.state === 'connected' || status?.state === 'connecting' || status?.state === 'reconnecting';
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2 mb-5">
+        <Smartphone className="w-4 h-4 text-primary" />
+        <h2 className="text-base font-semibold text-foreground">Remote Connection</h2>
+      </div>
+
+      <div className="space-y-4">
+        {/* Status */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              'w-2 h-2 rounded-full',
+              isConnected ? 'bg-emerald-400' : isActive ? 'bg-amber-400 animate-pulse' : 'bg-zinc-600'
+            )} />
+            <span className="text-sm text-foreground">
+              {status?.state === 'connected' ? 'Connected to relay' :
+               status?.state === 'connecting' ? 'Connecting...' :
+               status?.state === 'reconnecting' ? 'Reconnecting...' :
+               'Disconnected'}
+            </span>
+            {status?.pairingId && (
+              <span className="text-xs text-muted-foreground font-mono">
+                ({status.pairingId.slice(0, 8)})
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isActive ? (
+              <button
+                onClick={handleStop}
+                disabled={loading}
+                className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors flex items-center gap-1 font-medium"
+              >
+                <PowerOff className="w-3 h-3" /> Stop
+              </button>
+            ) : (
+              <button
+                onClick={handleStart}
+                disabled={loading}
+                className="px-3 py-1.5 text-xs bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors flex items-center gap-1 font-medium"
+              >
+                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Power className="w-3 h-3" />}
+                Connect
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* QR Code Toggle */}
+        {isActive && (
+          <>
+            <label className="flex items-center justify-between cursor-pointer p-3 rounded-lg hover:bg-accent/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <QrCode className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <span className="text-sm text-foreground font-medium">Show QR Code</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">Scan with the Claudit iOS app to pair</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQR(!showQR)}
+                className={cn(
+                  'relative w-11 h-6 rounded-full transition-colors flex-shrink-0',
+                  showQR ? 'bg-primary' : 'bg-secondary'
+                )}
+              >
+                <span className={cn(
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
+                  showQR && 'translate-x-5'
+                )} />
+              </button>
+            </label>
+
+            {/* QR Code Display */}
+            {showQR && (
+              <div className="flex flex-col items-center py-4 animate-fade-in">
+                <div className="bg-white rounded-xl p-4 mb-3">
+                  <img
+                    src="/api/relay/qr"
+                    alt="Pairing QR Code"
+                    className="w-56 h-56"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Open Claudit iOS app and scan this code
+                </p>
+                {status?.pairing?.relayUrl && (
+                  <p className="text-xs text-muted-foreground mt-1 font-mono">
+                    {status.pairing.relayUrl}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Unpair */}
+        {status?.pairing && (
+          <div className="flex items-center justify-between pt-2 border-t border-border">
+            <div>
+              <p className="text-xs text-muted-foreground">
+                Paired since first connection. Credentials are saved locally.
+              </p>
+            </div>
+            <button
+              onClick={handleUnpair}
+              disabled={loading}
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-colors flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Unpair
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

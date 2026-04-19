@@ -37,6 +37,14 @@ struct SessionDetail: Codable {
     let projectPath: String
     let messages: [ParsedMessage]
     let slug: String?
+
+    /// Limit messages to avoid stack overflow on large sessions
+    var recentMessages: [ParsedMessage] {
+        if messages.count > 200 {
+            return Array(messages.suffix(200))
+        }
+        return messages
+    }
 }
 
 struct MergedSessionDetail: Codable {
@@ -82,9 +90,19 @@ struct ContentBlock: Codable, Identifiable {
         case id
     }
 
+    init(id: String, type: ContentBlockType, text: String?, name: String?, input: [String: AnyCodable]?, toolUseId: String?, content: ContentBlockContent?, thinking: String?) {
+        self.id = id
+        self.type = type
+        self.text = text
+        self.name = name
+        self.input = input
+        self.toolUseId = toolUseId
+        self.content = content
+        self.thinking = thinking
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Use 'id' from JSON if present, otherwise generate stable one
         self.id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
         self.type = try container.decode(ContentBlockType.self, forKey: .type)
         self.text = try container.decodeIfPresent(String.self, forKey: .text)
@@ -105,15 +123,14 @@ enum ContentBlockType: String, Codable {
 
 enum ContentBlockContent: Codable {
     case string(String)
-    case blocks([ContentBlock])
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let str = try? container.decode(String.self) {
             self = .string(str)
-        } else if let blocks = try? container.decode([ContentBlock].self) {
-            self = .blocks(blocks)
         } else {
+            // Nested blocks (tool_result content) — flatten to avoid stack overflow
+            // ContentBlock → ContentBlockContent → [ContentBlock] recursion blows the stack
             self = .string("")
         }
     }
@@ -123,16 +140,12 @@ enum ContentBlockContent: Codable {
         switch self {
         case .string(let str):
             try container.encode(str)
-        case .blocks(let blocks):
-            try container.encode(blocks)
         }
     }
 
     var text: String {
         switch self {
         case .string(let s): return s
-        case .blocks(let blocks):
-            return blocks.compactMap { $0.text }.joined(separator: "\n")
         }
     }
 }

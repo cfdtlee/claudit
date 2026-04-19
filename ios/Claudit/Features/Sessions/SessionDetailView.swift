@@ -8,6 +8,7 @@ struct SessionDetailView: View {
     @State private var keyboardVisible = false
     @State private var isSending = false
     @State private var sendStatus: String?
+    @State private var reloadWorkItem: DispatchWorkItem?
 
     let projectHash: String
     let sessionId: String
@@ -77,12 +78,24 @@ struct SessionDetailView: View {
             viewModel.setClient(appState.apiClient)
             loadConversation()
 
-            // Listen for real-time session updates via WebSocket events
-            appState.tunnel?.onEvent = { [self] eventJSON in
-                if eventJSON.contains("session:updated") || eventJSON.contains("session:created") {
+            // Listen for terminal data — when Claude finishes responding,
+            // debounce-reload the conversation after data stops flowing
+            appState.tunnel?.onTerminalData = { _ in
+                guard isSending else { return }
+                // Cancel previous reload
+                reloadWorkItem?.cancel()
+                // Schedule reload 2s after last terminal data
+                let item = DispatchWorkItem {
                     handleSessionEvent()
                 }
+                reloadWorkItem = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: item)
             }
+        }
+        .onDisappear {
+            // Clean up terminal data listener
+            appState.tunnel?.onTerminalData = nil
+            reloadWorkItem?.cancel()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             keyboardVisible = true
@@ -99,7 +112,13 @@ struct SessionDetailView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(detail.messages) { message in
+                        if detail.messages.count > 200 {
+                            Text("Showing last 200 of \(detail.messages.count) messages")
+                                .font(.caption)
+                                .foregroundStyle(.textSecondary)
+                                .padding(.bottom, 8)
+                        }
+                        ForEach(detail.recentMessages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
                         }
@@ -108,12 +127,12 @@ struct SessionDetailView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onAppear {
-                    if let last = detail.messages.last {
+                    if let last = detail.recentMessages.last {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
                 .onChange(of: keyboardVisible) {
-                    if keyboardVisible, let last = detail.messages.last {
+                    if keyboardVisible, let last = detail.recentMessages.last {
                         withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(last.id, anchor: .bottom)
                         }
@@ -221,7 +240,7 @@ struct SessionDetailView: View {
                 try tunnel.sendTerminalInput(savedText + "\r")
                 sendStatus = "Waiting for response..."
 
-                // The event listener will auto-refresh when session:updated fires
+                // session:updated event will trigger handleSessionEvent() to refresh
             } catch {
                 sendStatus = "Error: \(error.localizedDescription)"
                 try? await Task.sleep(for: .seconds(3))

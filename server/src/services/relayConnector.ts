@@ -399,8 +399,13 @@ function startEventForwarding(): void {
   const port = getLocalPort();
   localEventsWs = new WebSocket(`ws://127.0.0.1:${port}/ws/events`);
   localEventsWs.on('message', (data: Buffer) => {
-    try { sendEncrypted(controlWs, { channel: 'events', ...JSON.parse(data.toString()) }); }
-    catch (err: any) { console.error('[relay] Event forward error:', err.message); }
+    try {
+      sendEncrypted(controlWs, {
+        channel: 'events',
+        requestId: null,
+        payload: data.toString(),
+      });
+    } catch (err: any) { console.error('[relay] Event forward error:', err.message); }
   });
   localEventsWs.on('close', () => {
     localEventsWs = null;

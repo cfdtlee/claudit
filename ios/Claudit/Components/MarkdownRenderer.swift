@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Simple markdown renderer that converts common markdown to styled Text views.
+/// Markdown renderer using AttributedString (no recursive Text concatenation).
 struct MarkdownRenderer: View {
     let text: String
 
@@ -17,7 +17,7 @@ struct MarkdownRenderer: View {
     private enum MarkdownBlock {
         case paragraph(String)
         case heading(Int, String)
-        case codeBlock(String, String?) // code, language
+        case codeBlock(String, String?)
         case listItem(String)
         case divider
     }
@@ -37,7 +37,6 @@ struct MarkdownRenderer: View {
                     blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
                     currentParagraph = ""
                 }
-
                 let lang = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 var code = ""
                 i += 1
@@ -52,90 +51,64 @@ struct MarkdownRenderer: View {
             }
 
             // Heading
-            if line.hasPrefix("# ") {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
-                blocks.append(.heading(1, String(line.dropFirst(2))))
-                i += 1
-                continue
+            if line.hasPrefix("### ") {
+                flushParagraph(&currentParagraph, &blocks)
+                blocks.append(.heading(3, String(line.dropFirst(4))))
+                i += 1; continue
             }
             if line.hasPrefix("## ") {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
+                flushParagraph(&currentParagraph, &blocks)
                 blocks.append(.heading(2, String(line.dropFirst(3))))
-                i += 1
-                continue
+                i += 1; continue
             }
-            if line.hasPrefix("### ") {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
-                blocks.append(.heading(3, String(line.dropFirst(4))))
-                i += 1
-                continue
+            if line.hasPrefix("# ") {
+                flushParagraph(&currentParagraph, &blocks)
+                blocks.append(.heading(1, String(line.dropFirst(2))))
+                i += 1; continue
             }
 
             // Horizontal rule
             if line.trimmingCharacters(in: .whitespaces).allSatisfy({ $0 == "-" }) && line.count >= 3 {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
+                flushParagraph(&currentParagraph, &blocks)
                 blocks.append(.divider)
-                i += 1
-                continue
+                i += 1; continue
             }
 
             // List item
             if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
+                flushParagraph(&currentParagraph, &blocks)
                 blocks.append(.listItem(String(line.dropFirst(2))))
-                i += 1
-                continue
+                i += 1; continue
             }
 
             // Numbered list
             if let match = line.range(of: #"^\d+\.\s"#, options: .regularExpression) {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
+                flushParagraph(&currentParagraph, &blocks)
                 blocks.append(.listItem(String(line[match.upperBound...])))
-                i += 1
-                continue
+                i += 1; continue
             }
 
             // Empty line = paragraph break
             if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                if !currentParagraph.isEmpty {
-                    blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-                    currentParagraph = ""
-                }
-                i += 1
-                continue
+                flushParagraph(&currentParagraph, &blocks)
+                i += 1; continue
             }
 
             // Regular text
-            if !currentParagraph.isEmpty {
-                currentParagraph += " "
-            }
+            if !currentParagraph.isEmpty { currentParagraph += " " }
             currentParagraph += line
             i += 1
         }
 
-        if !currentParagraph.isEmpty {
-            blocks.append(.paragraph(currentParagraph.trimmingCharacters(in: .whitespaces)))
-        }
-
+        flushParagraph(&currentParagraph, &blocks)
         return blocks
+    }
+
+    private func flushParagraph(_ para: inout String, _ blocks: inout [MarkdownBlock]) {
+        if !para.isEmpty {
+            blocks.append(.paragraph(para.trimmingCharacters(in: .whitespaces)))
+            para = ""
+        }
     }
 
     // MARK: - Block Rendering
@@ -144,7 +117,7 @@ struct MarkdownRenderer: View {
     private func renderBlock(_ block: MarkdownBlock) -> some View {
         switch block {
         case .paragraph(let text):
-            renderInlineMarkdown(text)
+            Text(renderInline(text))
                 .font(.subheadline)
                 .foregroundStyle(.textPrimary)
 
@@ -176,7 +149,7 @@ struct MarkdownRenderer: View {
             HStack(alignment: .top, spacing: 6) {
                 Text("\u{2022}")
                     .foregroundStyle(.textSecondary)
-                renderInlineMarkdown(text)
+                Text(renderInline(text))
                     .font(.subheadline)
                     .foregroundStyle(.textPrimary)
             }
@@ -186,42 +159,56 @@ struct MarkdownRenderer: View {
         }
     }
 
-    private func renderInlineMarkdown(_ text: String) -> Text {
-        // Handle inline code, bold, italic
-        var result = Text("")
-        var remaining = text[text.startIndex...]
+    /// Render inline markdown using AttributedString — O(n), no stack recursion.
+    private func renderInline(_ text: String) -> AttributedString {
+        var result = AttributedString()
+        var i = text.startIndex
 
-        while !remaining.isEmpty {
+        while i < text.endIndex {
             // Inline code: `code`
-            if remaining.hasPrefix("`"), let end = remaining.dropFirst().firstIndex(of: "`") {
-                let code = remaining[remaining.index(after: remaining.startIndex)..<end]
-                result = result + Text(String(code))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.accentBlue)
-                remaining = remaining[remaining.index(after: end)...]
-                continue
+            if text[i] == "`" {
+                let start = text.index(after: i)
+                if let end = text[start...].firstIndex(of: "`") {
+                    var attr = AttributedString(text[start..<end])
+                    attr.font = .system(.caption, design: .monospaced)
+                    attr.foregroundColor = .accentBlue
+                    result += attr
+                    i = text.index(after: end)
+                    continue
+                }
             }
 
             // Bold: **text**
-            if remaining.hasPrefix("**"), let end = remaining.dropFirst(2).range(of: "**") {
-                let bold = remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<end.lowerBound]
-                result = result + Text(String(bold)).bold()
-                remaining = remaining[end.upperBound...]
-                continue
+            if text[i...].hasPrefix("**") {
+                let start = text.index(i, offsetBy: 2)
+                if let range = text[start...].range(of: "**") {
+                    var attr = AttributedString(text[start..<range.lowerBound])
+                    attr.font = .subheadline.bold()
+                    result += attr
+                    i = range.upperBound
+                    continue
+                }
             }
 
-            // Italic: *text* (but not **)
-            if remaining.hasPrefix("*") && !remaining.hasPrefix("**"),
-               let end = remaining.dropFirst().firstIndex(of: "*") {
-                let italic = remaining[remaining.index(after: remaining.startIndex)..<end]
-                result = result + Text(String(italic)).italic()
-                remaining = remaining[remaining.index(after: end)...]
-                continue
+            // Italic: *text* (not **)
+            if text[i] == "*" && !text[i...].hasPrefix("**") {
+                let start = text.index(after: i)
+                if let end = text[start...].firstIndex(of: "*") {
+                    var attr = AttributedString(text[start..<end])
+                    attr.font = .subheadline.italic()
+                    result += attr
+                    i = text.index(after: end)
+                    continue
+                }
             }
 
-            // Regular character
-            result = result + Text(String(remaining.first!))
-            remaining = remaining.dropFirst()
+            // Regular character — collect a run of plain text for efficiency
+            var runEnd = text.index(after: i)
+            while runEnd < text.endIndex && text[runEnd] != "`" && text[runEnd] != "*" {
+                runEnd = text.index(after: runEnd)
+            }
+            result += AttributedString(text[i..<runEnd])
+            i = runEnd
         }
 
         return result

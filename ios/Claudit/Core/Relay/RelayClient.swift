@@ -1,16 +1,16 @@
 import Foundation
+import Starscream
 
-/// WebSocket client that connects to the claudit relay server.
-/// Uses aggressive pinging and dead-connection detection to survive Fly.io proxy idle timeouts.
-final class RelayClient: NSObject, @unchecked Sendable {
+/// WebSocket client using Starscream for reliable relay connections.
+/// Starscream manages its own TCP connection, avoiding URLSessionWebSocketTask's
+/// HTTP/2 multiplexing bug that causes silent disconnections through Fly.io proxies.
+final class RelayClient: @unchecked Sendable, WebSocketDelegate {
     private let relayURL: String
     private let pairingId: String
     let tunnel: TunnelProtocol
     private let onStatusChange: (ConnectionStatus) -> Void
 
-    private var currentConnectionId: UUID?
-    private var webSocketTask: URLSessionWebSocketTask?
-    private var session: URLSession?
+    private var socket: WebSocket?
     private var reconnectAttempt = 0
     private let maxReconnectDelay: TimeInterval = 30
     private var isManualDisconnect = false
@@ -18,6 +18,7 @@ final class RelayClient: NSObject, @unchecked Sendable {
     private var pongDeadline: Date?
     private var reconnectWorkItem: DispatchWorkItem?
     private var pendingSends: [String] = []
+    private var hasJoined = false
 
     init(
         relayURL: String,
@@ -29,84 +30,126 @@ final class RelayClient: NSObject, @unchecked Sendable {
         self.pairingId = pairingId
         self.tunnel = tunnel
         self.onStatusChange = onStatusChange
-        super.init()
         tunnel.relayClient = self
         print("[Relay] Init relay=\(relayURL) pairing=\(pairingId)")
     }
 
     func connect() {
         isManualDisconnect = false
+        hasJoined = false
         reconnectWorkItem?.cancel()
         reconnectWorkItem = nil
 
-        // Clean up previous connection
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
-        webSocketTask = nil
-        session?.invalidateAndCancel()
-        session = nil
+        // Clean up previous socket
+        socket?.disconnect()
+        socket = nil
 
-        let connId = UUID()
-        currentConnectionId = connId
         onStatusChange(.connecting)
 
         let wsURL = buildWSURL()
-        print("[Relay] [\(connId.uuidString.prefix(4))] Connecting to \(wsURL)")
+        print("[Relay] Connecting to \(wsURL)")
         guard let url = URL(string: wsURL) else {
             onStatusChange(.disconnected)
             return
         }
 
-        let delegateQueue = OperationQueue()
-        delegateQueue.maxConcurrentOperationCount = 1
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
 
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 60
-
-        let newSession = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
-        self.session = newSession
-        let task = newSession.webSocketTask(with: url)
-        self.webSocketTask = task
-        task.resume()
+        let ws = WebSocket(request: request)
+        ws.delegate = self
+        ws.callbackQueue = DispatchQueue(label: "com.claudit.relay.ws", qos: .userInitiated)
+        self.socket = ws
+        ws.connect()
     }
 
     func disconnect() {
+        print("[Relay] Manual disconnect")
         isManualDisconnect = true
-        currentConnectionId = nil
         reconnectWorkItem?.cancel()
         reconnectWorkItem = nil
         DispatchQueue.main.async {
             self.pingTimer?.invalidate()
             self.pingTimer = nil
         }
-        webSocketTask?.cancel(with: .normalClosure, reason: nil)
-        webSocketTask = nil
-        session?.invalidateAndCancel()
-        session = nil
+        socket?.disconnect()
+        socket = nil
         onStatusChange(.disconnected)
     }
 
+    private var _isConnected = false
+
     func send(_ message: String) {
-        guard let task = webSocketTask else {
-            print("[Relay] Send: no task, queueing")
+        guard let ws = socket, _isConnected else {
             pendingSends.append(message)
-            scheduleReconnect()
+            if socket == nil && !isManualDisconnect {
+                scheduleReconnect()
+            }
             return
         }
-        task.send(.string(message)) { [weak self] error in
-            if let error {
-                print("[Relay] Send error: \(error.localizedDescription)")
-                self?.scheduleReconnect()
-            }
-        }
+        ws.write(string: message)
     }
 
-    /// Queue message, reconnect if needed, send when connected.
     func ensureConnectedAndSend(_ message: String) {
-        if webSocketTask == nil {
+        if socket == nil || !_isConnected {
             pendingSends.append(message)
             connect()
         } else {
             send(message)
+        }
+    }
+
+    // MARK: - WebSocketDelegate
+
+    func didReceive(event: WebSocketEvent, client: any WebSocketClient) {
+        switch event {
+        case .connected(_):
+            print("[Relay] WebSocket connected")
+            _isConnected = true
+            sendJoinMessage()
+
+        case .disconnected(let reason, let code):
+            print("[Relay] Disconnected: \(reason) (code \(code))")
+            handleDisconnection()
+
+        case .text(let text):
+            processMessage(text)
+
+        case .binary(let data):
+            if let text = String(data: data, encoding: .utf8) {
+                processMessage(text)
+            }
+
+        case .ping(_):
+            // Starscream auto-responds with pong
+            break
+
+        case .pong(_):
+            pongDeadline = nil
+
+        case .viabilityChanged(let viable):
+            if !viable {
+                print("[Relay] Connection no longer viable")
+                handleDisconnection()
+            }
+
+        case .reconnectSuggested(let suggested):
+            if suggested {
+                print("[Relay] Reconnect suggested")
+                handleDisconnection()
+            }
+
+        case .cancelled:
+            print("[Relay] Connection cancelled")
+            handleDisconnection()
+
+        case .error(let error):
+            print("[Relay] Error: \(error?.localizedDescription ?? "unknown")")
+            handleDisconnection()
+
+        case .peerClosed:
+            print("[Relay] Peer closed")
+            handleDisconnection()
         }
     }
 
@@ -123,37 +166,10 @@ final class RelayClient: NSObject, @unchecked Sendable {
 
     private func sendJoinMessage() {
         let join = "{\"type\":\"join\",\"pairingId\":\"\(pairingId)\",\"role\":\"client\"}"
-        send(join)
+        socket?.write(string: join)
     }
 
-    private func startReceiveLoop(_ connId: UUID) {
-        guard connId == currentConnectionId, let task = webSocketTask else { return }
-
-        task.receive { [weak self] result in
-            guard let self, connId == self.currentConnectionId else { return }
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let text): self.processMessage(text, connId: connId)
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
-                        self.processMessage(text, connId: connId)
-                    }
-                @unknown default: break
-                }
-                self.startReceiveLoop(connId)
-
-            case .failure(let error):
-                guard connId == self.currentConnectionId else { return }
-                print("[Relay] Receive error: \(error.localizedDescription)")
-                self.scheduleReconnect()
-            }
-        }
-    }
-
-    private func processMessage(_ text: String, connId: UUID) {
-        guard connId == currentConnectionId else { return }
-
+    private func processMessage(_ text: String) {
         // Relay control messages (unencrypted JSON)
         if let data = text.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -162,6 +178,7 @@ final class RelayClient: NSObject, @unchecked Sendable {
             case "joined":
                 let peer = json["peer"] as? String ?? "waiting"
                 print("[Relay] Joined, peer: \(peer)")
+                hasJoined = true
                 if peer == "connected" { markConnected() }
             case "peer_joined":
                 print("[Relay] Peer joined")
@@ -170,7 +187,7 @@ final class RelayClient: NSObject, @unchecked Sendable {
                 print("[Relay] Peer left")
                 DispatchQueue.main.async { self.onStatusChange(.reconnecting) }
             case "pong":
-                pongDeadline = nil // Pong received, connection alive
+                pongDeadline = nil
             default: break
             }
             return
@@ -201,51 +218,44 @@ final class RelayClient: NSObject, @unchecked Sendable {
             let msgs = self.pendingSends
             self.pendingSends = []
             for msg in msgs { self.send(msg) }
-            // Start aggressive ping — every 5s to prevent Fly.io proxy idle timeout
+            // Start ping timer (every 15s is plenty with Starscream's own TCP connection)
             self.startPingTimer()
         }
     }
 
     private func startPingTimer() {
         pingTimer?.invalidate()
-        // Send both app-level and WS-level pings every 5 seconds
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            guard let self, let task = self.webSocketTask else { return }
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            guard let self else { return }
 
-            // Check if previous pong was missed (dead connection)
             if let deadline = self.pongDeadline, Date() > deadline {
-                print("[Relay] Pong timeout — connection dead, reconnecting")
+                print("[Relay] Pong timeout, reconnecting")
                 self.scheduleReconnect()
                 return
             }
 
-            // Send app-level ping (relay responds with pong)
             self.send("{\"type\":\"ping\"}")
-            self.pongDeadline = Date().addingTimeInterval(10) // Expect pong within 10s
-
-            // Also send WS-level ping
-            task.sendPing { error in
-                if let error {
-                    print("[Relay] WS ping failed: \(error.localizedDescription)")
-                    self.scheduleReconnect()
-                }
-            }
+            self.pongDeadline = Date().addingTimeInterval(15)
+            self.socket?.write(ping: Data())
         }
+    }
+
+    private func handleDisconnection() {
+        _isConnected = false
+        guard !isManualDisconnect else { return }
+        scheduleReconnect()
     }
 
     private func scheduleReconnect() {
         guard !isManualDisconnect else { return }
-        // Prevent duplicate reconnect scheduling
         guard reconnectWorkItem == nil else { return }
 
         DispatchQueue.main.async {
             self.pingTimer?.invalidate()
             self.pingTimer = nil
         }
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
-        webSocketTask = nil
-        session?.invalidateAndCancel()
-        session = nil
+        socket?.disconnect()
+        socket = nil
 
         let delay = min(pow(2.0, Double(reconnectAttempt)), maxReconnectDelay)
         reconnectAttempt += 1
@@ -259,28 +269,5 @@ final class RelayClient: NSObject, @unchecked Sendable {
         }
         reconnectWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
-    }
-}
-
-// MARK: - URLSessionWebSocketDelegate
-
-extension RelayClient: URLSessionWebSocketDelegate {
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol proto: String?) {
-        guard let connId = currentConnectionId else { return }
-        print("[Relay] [\(connId.uuidString.prefix(4))] WebSocket opened")
-        sendJoinMessage()
-        startReceiveLoop(connId)
-    }
-
-    func urlSession(_ session: URLSession, webSocketTask task: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        print("[Relay] WebSocket closed: \(closeCode.rawValue)")
-        scheduleReconnect()
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error {
-            print("[Relay] Task error: \(error.localizedDescription)")
-            scheduleReconnect()
-        }
     }
 }

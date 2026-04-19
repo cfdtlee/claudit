@@ -14,6 +14,7 @@
 		3BAAEE3BBA04C382F46D2F99 /* PairingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F21923168279DEB5EBD943 /* PairingViewModel.swift */; };
 		4A6D5E88A205897AFBA5CE56 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3D7EA5F67E08072B819DFA9 /* TaskListView.swift */; };
 		4C0AD9AD996096C166AB1CE0 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741D990617A9BF242E0404D9 /* TerminalView.swift */; };
+		5C64D4FF09B65CB3137A6A2B /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = C47656541F5FFC4FF8A52177 /* Starscream */; };
 		5EC8A7B84F50A8889DA1F23E /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74D40DD9F2CF5481655170B /* ConnectionIndicator.swift */; };
 		68F5433D16910984A01E7DA2 /* ClauditApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68ED6D20A4BDF4C6A289F59 /* ClauditApp.swift */; };
 		76CE734AB01C9B15D1F5963F /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E34B2F04F75190C32B0CC749 /* TaskDetailView.swift */; };
@@ -67,6 +68,17 @@
 		F3D7EA5F67E08072B819DFA9 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		F6235D4C591AEA619AB3F61A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		402B51CACD31B1FDFC154795 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C64D4FF09B65CB3137A6A2B /* Starscream in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		10D258B4FFBC03DFF2457CD6 /* Components */ = {
@@ -232,6 +244,7 @@
 			buildConfigurationList = 932B22F36A781F8DAB697900 /* Build configuration list for PBXNativeTarget "Claudit" */;
 			buildPhases = (
 				4103C4DF7B797D97B08C7F03 /* Sources */,
+				402B51CACD31B1FDFC154795 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -239,6 +252,7 @@
 			);
 			name = Claudit;
 			packageProductDependencies = (
+				C47656541F5FFC4FF8A52177 /* Starscream */,
 			);
 			productName = Claudit;
 			productReference = B2A2B024A32D6BB42DF422AC /* Claudit.app */;
@@ -263,6 +277,9 @@
 			);
 			mainGroup = BE6CFEFDA9CF4A64B4043AD6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8EA2EE6FEA679DC3B15A16EF /* XCRemoteSwiftPackageReference "Starscream" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -490,6 +507,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8EA2EE6FEA679DC3B15A16EF /* XCRemoteSwiftPackageReference "Starscream" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/daltoniam/Starscream.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C47656541F5FFC4FF8A52177 /* Starscream */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8EA2EE6FEA679DC3B15A16EF /* XCRemoteSwiftPackageReference "Starscream" */;
+			productName = Starscream;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 962374D9A3B6EC81A73D3B66 /* Project object */;
 }
