@@ -3,13 +3,12 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		07CD6F8BCC3F627203BFDCE1 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54EDDDCDBB5D8F1F48A2AD47 /* MarkdownRenderer.swift */; };
 		15A370C9F0D8928787E1C832 /* TaskViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 862ABDBF018D89F8A28D0C18 /* TaskViewModel.swift */; };
-		2CD4AF8214D304CE2E4FFCCB /* TerminalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DEB16C630130DA916C88DF1 /* TerminalViewModel.swift */; };
 		3B9F43C433A8B6251EB2CAD6 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9901C4AED83F2EF06535CB45 /* Models.swift */; };
 		3BAAEE3BBA04C382F46D2F99 /* PairingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F21923168279DEB5EBD943 /* PairingViewModel.swift */; };
 		4A6D5E88A205897AFBA5CE56 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3D7EA5F67E08072B819DFA9 /* TaskListView.swift */; };
@@ -17,7 +16,6 @@
 		5C64D4FF09B65CB3137A6A2B /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = C47656541F5FFC4FF8A52177 /* Starscream */; };
 		5EC8A7B84F50A8889DA1F23E /* ConnectionIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74D40DD9F2CF5481655170B /* ConnectionIndicator.swift */; };
 		68F5433D16910984A01E7DA2 /* ClauditApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68ED6D20A4BDF4C6A289F59 /* ClauditApp.swift */; };
-		71FC6C83C5527EEFB6427D7D /* ChatClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE8EDCA49C68B939AD6729B9 /* ChatClient.swift */; };
 		76CE734AB01C9B15D1F5963F /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E34B2F04F75190C32B0CC749 /* TaskDetailView.swift */; };
 		7EEB77943B6EDB9B37C9F356 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A4D90D8089104D39DC3FCE /* AppState.swift */; };
 		7FF266B694F4B416B78791BA /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E893F1E8DDC14CB35B0330D /* RelayClient.swift */; };
@@ -54,16 +52,14 @@
 		741D990617A9BF242E0404D9 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		81F2F2FFD671B3832C20F848 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		862ABDBF018D89F8A28D0C18 /* TaskViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskViewModel.swift; sourceTree = "<group>"; };
-		8DEB16C630130DA916C88DF1 /* TerminalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalViewModel.swift; sourceTree = "<group>"; };
 		9901C4AED83F2EF06535CB45 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A74D40DD9F2CF5481655170B /* ConnectionIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionIndicator.swift; sourceTree = "<group>"; };
 		AEFF2EA028AFA075F2D5DDC8 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
-		B2A2B024A32D6BB42DF422AC /* Claudit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Claudit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2A2B024A32D6BB42DF422AC /* Claudit.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Claudit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C32DAB454051EE661A7BC61F /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		C502938836C490D113307E3D /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
 		C8317A7B0F053201590A5B82 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D62D44534654C4B68F71AB32 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
-		DE8EDCA49C68B939AD6729B9 /* ChatClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatClient.swift; sourceTree = "<group>"; };
 		E34B2F04F75190C32B0CC749 /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		E3545D7091C4B2D74A1AB3D1 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		E68ED6D20A4BDF4C6A289F59 /* ClauditApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClauditApp.swift; sourceTree = "<group>"; };
@@ -101,7 +97,6 @@
 			isa = PBXGroup;
 			children = (
 				741D990617A9BF242E0404D9 /* TerminalView.swift */,
-				8DEB16C630130DA916C88DF1 /* TerminalViewModel.swift */,
 			);
 			path = Terminal;
 			sourceTree = "<group>";
@@ -141,7 +136,6 @@
 			isa = PBXGroup;
 			children = (
 				4AB4FCE6D81667175869647C /* APIClient.swift */,
-				DE8EDCA49C68B939AD6729B9 /* ChatClient.swift */,
 				9901C4AED83F2EF06535CB45 /* Models.swift */,
 			);
 			path = API;
@@ -272,6 +266,11 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					3C88C0B91C7E39D8DC7192C6 = {
+						DevelopmentTeam = "";
+					};
+				};
 			};
 			buildConfigurationList = 96915B9C38232BA6D2811EA6 /* Build configuration list for PBXProject "Claudit" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -287,6 +286,7 @@
 				8EA2EE6FEA679DC3B15A16EF /* XCRemoteSwiftPackageReference "Starscream" */,
 				F577A9293268FDBEC98622C3 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -302,7 +302,6 @@
 			files = (
 				AAC5E0C4EBB7AECA314B79C0 /* APIClient.swift in Sources */,
 				7EEB77943B6EDB9B37C9F356 /* AppState.swift in Sources */,
-				71FC6C83C5527EEFB6427D7D /* ChatClient.swift in Sources */,
 				68F5433D16910984A01E7DA2 /* ClauditApp.swift in Sources */,
 				DBB5A901D0BC4D837043C766 /* Colors.swift in Sources */,
 				5EC8A7B84F50A8889DA1F23E /* ConnectionIndicator.swift in Sources */,
@@ -326,7 +325,6 @@
 				4A6D5E88A205897AFBA5CE56 /* TaskListView.swift in Sources */,
 				15A370C9F0D8928787E1C832 /* TaskViewModel.swift in Sources */,
 				4C0AD9AD996096C166AB1CE0 /* TerminalView.swift in Sources */,
-				2CD4AF8214D304CE2E4FFCCB /* TerminalViewModel.swift in Sources */,
 				DBB02C868E34B564E4F0C000 /* TunnelProtocol.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -461,7 +459,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = R6U9X4QR6C;
 				INFOPLIST_FILE = Claudit/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -480,7 +477,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = R6U9X4QR6C;
 				INFOPLIST_FILE = Claudit/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

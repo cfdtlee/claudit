@@ -11,14 +11,53 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
     private let onStatusChange: (ConnectionStatus) -> Void
 
     private var socket: WebSocket?
-    private var reconnectAttempt = 0
+    private let stateQueue = DispatchQueue(label: "com.claudit.relay.state")
+    private var _reconnectAttempt = 0
     private let maxReconnectDelay: TimeInterval = 30
-    private var isManualDisconnect = false
+    private var _isManualDisconnect = false
     private var pingTimer: Timer?
-    private var pongDeadline: Date?
-    private var reconnectWorkItem: DispatchWorkItem?
-    private var pendingSends: [String] = []
-    private var hasJoined = false
+    private var _pongDeadline: Date?
+    private var _reconnectWorkItem: DispatchWorkItem?
+    private var _pendingSends: [String] = []
+    private var _hasJoined = false
+    private var _isConnected = false
+
+    // MARK: - Thread-safe accessors
+
+    private var isConnected: Bool {
+        get { stateQueue.sync { _isConnected } }
+        set { stateQueue.sync { _isConnected = newValue } }
+    }
+
+    private var pendingSends: [String] {
+        get { stateQueue.sync { _pendingSends } }
+        set { stateQueue.sync { _pendingSends = newValue } }
+    }
+
+    private var reconnectAttempt: Int {
+        get { stateQueue.sync { _reconnectAttempt } }
+        set { stateQueue.sync { _reconnectAttempt = newValue } }
+    }
+
+    private var isManualDisconnect: Bool {
+        get { stateQueue.sync { _isManualDisconnect } }
+        set { stateQueue.sync { _isManualDisconnect = newValue } }
+    }
+
+    private var pongDeadline: Date? {
+        get { stateQueue.sync { _pongDeadline } }
+        set { stateQueue.sync { _pongDeadline = newValue } }
+    }
+
+    private var hasJoined: Bool {
+        get { stateQueue.sync { _hasJoined } }
+        set { stateQueue.sync { _hasJoined = newValue } }
+    }
+
+    private var reconnectWorkItem: DispatchWorkItem? {
+        get { stateQueue.sync { _reconnectWorkItem } }
+        set { stateQueue.sync { _reconnectWorkItem = newValue } }
+    }
 
     init(
         relayURL: String,
@@ -32,6 +71,15 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
         self.onStatusChange = onStatusChange
         tunnel.relayClient = self
         print("[Relay] Init relay=\(relayURL) pairing=\(pairingId)")
+    }
+
+    deinit {
+        pingTimer?.invalidate()
+        pingTimer = nil
+        _reconnectWorkItem?.cancel()
+        _reconnectWorkItem = nil
+        socket?.disconnect()
+        socket = nil
     }
 
     func connect() {
@@ -77,11 +125,9 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
         onStatusChange(.disconnected)
     }
 
-    private var _isConnected = false
-
     func send(_ message: String) {
-        guard let ws = socket, _isConnected else {
-            pendingSends.append(message)
+        guard let ws = socket, isConnected else {
+            stateQueue.sync { _pendingSends.append(message) }
             if socket == nil && !isManualDisconnect {
                 scheduleReconnect()
             }
@@ -91,8 +137,8 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
     }
 
     func ensureConnectedAndSend(_ message: String) {
-        if socket == nil || !_isConnected {
-            pendingSends.append(message)
+        if socket == nil || !isConnected {
+            stateQueue.sync { _pendingSends.append(message) }
             connect()
         } else {
             send(message)
@@ -105,7 +151,7 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
         switch event {
         case .connected(_):
             print("[Relay] WebSocket connected")
-            _isConnected = true
+            isConnected = true
             sendJoinMessage()
 
         case .disconnected(let reason, let code):
@@ -215,8 +261,11 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
         DispatchQueue.main.async {
             self.onStatusChange(.connected)
             // Flush queued messages
-            let msgs = self.pendingSends
-            self.pendingSends = []
+            let msgs = self.stateQueue.sync { () -> [String] in
+                let m = self._pendingSends
+                self._pendingSends = []
+                return m
+            }
             for msg in msgs { self.send(msg) }
             // Start ping timer (every 15s is plenty with Starscream's own TCP connection)
             self.startPingTimer()
@@ -241,7 +290,7 @@ final class RelayClient: @unchecked Sendable, WebSocketDelegate {
     }
 
     private func handleDisconnection() {
-        _isConnected = false
+        isConnected = false
         guard !isManualDisconnect else { return }
         scheduleReconnect()
     }

@@ -115,24 +115,35 @@ final class TaskViewModel {
         return counts
     }
 
-    func timeAgo(from dateString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
-        guard let date = formatter.date(from: dateString) else {
-            // Try without fractional seconds
-            formatter.formatOptions = [.withInternetDateTime]
-            guard let date2 = formatter.date(from: dateString) else {
-                return dateString
-            }
-            return relativeTime(from: date2)
+    private static let isoFormatterNoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    func timeAgo(from dateString: String) -> String {
+        if let date = Self.isoFormatter.date(from: dateString) {
+            return relativeTime(from: date)
         }
-        return relativeTime(from: date)
+        if let date = Self.isoFormatterNoFractional.date(from: dateString) {
+            return relativeTime(from: date)
+        }
+        return dateString
     }
 
     private func relativeTime(from date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }

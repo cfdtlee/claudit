@@ -13,6 +13,7 @@ struct SessionDetailView: View {
     @State private var pendingUserMessage: String?
     @State private var chatResumed = false
     @State private var sessionLocked = false
+    @State private var showScrollToBottom = false
 
     let projectHash: String
     let sessionId: String
@@ -117,6 +118,7 @@ struct SessionDetailView: View {
                         ForEach(detail.recentMessages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
 
                         // Show the user's sent message immediately
@@ -135,23 +137,57 @@ struct SessionDetailView: View {
                         Color.clear.frame(height: 1).id(bottomAnchorId)
                     }
                     .padding()
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: detail.recentMessages.count)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onAppear {
                     // Delay to let LazyVStack finish layout before scrolling
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         scrollToBottom(proxy)
+                        showScrollToBottom = false
                     }
                 }
                 .onChange(of: viewModel.selectedDetail?.messages.count) {
                     scrollToBottom(proxy)
+                    showScrollToBottom = false
                 }
                 .onChange(of: pendingUserMessage) {
                     scrollToBottom(proxy)
+                    showScrollToBottom = false
                 }
                 .onChange(of: keyboardVisible) {
                     if keyboardVisible {
                         proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+                        showScrollToBottom = false
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if showScrollToBottom && !isTerminalMode && !detail.messages.isEmpty {
+                        Button {
+                            withAnimation {
+                                proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+                                showScrollToBottom = false
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.textPrimary)
+                                .frame(width: 36, height: 36)
+                                .background(Color.bgSecondary)
+                                .clipShape(Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 8)
+                        .transition(.opacity.combined(with: .scale))
+                    }
+                }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    let distanceFromBottom = geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
+                    return distanceFromBottom > 200
+                } action: { _, isScrolledUp in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showScrollToBottom = isScrolledUp
                     }
                 }
             }
@@ -285,6 +321,7 @@ struct SessionDetailView: View {
         isSending = true
         sendStatus = nil
         messageText = ""
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
         Task {
             do {
@@ -347,6 +384,7 @@ struct SessionDetailView: View {
                     isSending = false
                     sendStatus = nil
                     pendingUserMessage = nil
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
             }
         }

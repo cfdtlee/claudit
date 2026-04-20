@@ -3,11 +3,12 @@ import SwiftUI
 /// Markdown renderer using AttributedString (no recursive Text concatenation).
 struct MarkdownRenderer: View {
     let text: String
+    @State private var copiedCodeIndex: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
-                renderBlock(block)
+            ForEach(Array(parseBlocks().enumerated()), id: \.offset) { index, block in
+                renderBlock(block, index: index)
             }
         }
     }
@@ -18,7 +19,7 @@ struct MarkdownRenderer: View {
         case paragraph(String)
         case heading(Int, String)
         case codeBlock(String, String?)
-        case listItem(String)
+        case listItem(String, Int?)
         case divider
     }
 
@@ -77,14 +78,16 @@ struct MarkdownRenderer: View {
             // List item
             if line.hasPrefix("- ") || line.hasPrefix("* ") {
                 flushParagraph(&currentParagraph, &blocks)
-                blocks.append(.listItem(String(line.dropFirst(2))))
+                blocks.append(.listItem(String(line.dropFirst(2)), nil))
                 i += 1; continue
             }
 
             // Numbered list
             if let match = line.range(of: #"^\d+\.\s"#, options: .regularExpression) {
                 flushParagraph(&currentParagraph, &blocks)
-                blocks.append(.listItem(String(line[match.upperBound...])))
+                let numStr = String(line[line.startIndex..<line.firstIndex(of: ".")!])
+                let num = Int(numStr) ?? 1
+                blocks.append(.listItem(String(line[match.upperBound...]), num))
                 i += 1; continue
             }
 
@@ -114,7 +117,7 @@ struct MarkdownRenderer: View {
     // MARK: - Block Rendering
 
     @ViewBuilder
-    private func renderBlock(_ block: MarkdownBlock) -> some View {
+    private func renderBlock(_ block: MarkdownBlock, index: Int) -> some View {
         switch block {
         case .paragraph(let text):
             Text(renderInline(text))
@@ -127,14 +130,32 @@ struct MarkdownRenderer: View {
                 .foregroundStyle(.textPrimary)
 
         case .codeBlock(let code, let lang):
-            VStack(alignment: .leading, spacing: 4) {
-                if let lang, !lang.isEmpty {
-                    Text(lang)
+            VStack(alignment: .leading, spacing: 0) {
+                // Header bar with language label and copy button
+                HStack {
+                    Text(lang ?? "code")
                         .font(.caption2)
                         .foregroundStyle(.textSecondary)
-                        .padding(.horizontal, 8)
-                        .padding(.top, 6)
+                    Spacer()
+                    Button {
+                        UIPasteboard.general.string = code
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        copiedCodeIndex = index
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            if copiedCodeIndex == index {
+                                copiedCodeIndex = nil
+                            }
+                        }
+                    } label: {
+                        Image(systemName: copiedCodeIndex == index ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                            .foregroundStyle(copiedCodeIndex == index ? .green : .textSecondary)
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+
                 Text(code)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.textPrimary)
@@ -142,13 +163,20 @@ struct MarkdownRenderer: View {
                     .textSelection(.enabled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.bgPrimary)
+            .background(Color(white: 0.12))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
-        case .listItem(let text):
+        case .listItem(let text, let number):
             HStack(alignment: .top, spacing: 6) {
-                Text("\u{2022}")
-                    .foregroundStyle(.textSecondary)
+                if let num = number {
+                    Text("\(num).")
+                        .font(.subheadline)
+                        .foregroundStyle(.textSecondary)
+                        .frame(minWidth: 16, alignment: .trailing)
+                } else {
+                    Text("\u{2022}")
+                        .foregroundStyle(.textSecondary)
+                }
                 Text(renderInline(text))
                     .font(.subheadline)
                     .foregroundStyle(.textPrimary)

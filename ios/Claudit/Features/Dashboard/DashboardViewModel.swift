@@ -42,20 +42,35 @@ final class DashboardViewModel {
         return "\(count)"
     }
 
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let isoFormatterNoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     func timeAgo(from dateString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = formatter.date(from: dateString) else {
-            formatter.formatOptions = [.withInternetDateTime]
-            guard let d = formatter.date(from: dateString) else { return dateString }
-            return relativeTime(from: d)
+        if let date = Self.isoFormatter.date(from: dateString) {
+            return relativeTime(from: date)
         }
-        return relativeTime(from: date)
+        if let date = Self.isoFormatterNoFractional.date(from: dateString) {
+            return relativeTime(from: date)
+        }
+        return dateString
     }
 
     private func relativeTime(from date: Date) -> String {
-        let fmt = RelativeDateTimeFormatter()
-        fmt.unitsStyle = .abbreviated
-        return fmt.localizedString(for: date, relativeTo: Date())
+        Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }

@@ -40,6 +40,21 @@ struct MessageBubble: View {
                 Spacer(minLength: 20)
             }
         }
+        .contextMenu {
+            Button {
+                let allText = message.content.compactMap { block -> String? in
+                    switch block.type {
+                    case .text: return block.text
+                    case .thinking: return block.thinking
+                    default: return nil
+                    }
+                }.joined(separator: "\n")
+                UIPasteboard.general.string = allText
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+        }
     }
 
     // MARK: - Content Block Rendering

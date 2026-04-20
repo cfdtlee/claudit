@@ -4,6 +4,7 @@ struct SessionListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = SessionViewModel()
     @State private var collapsedGroups: Set<String> = []
+    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -19,7 +20,12 @@ struct SessionListView: View {
             .navigationTitle("Sessions")
             .searchable(text: $viewModel.searchQuery, prompt: "Search sessions...")
             .onChange(of: viewModel.searchQuery) {
-                Task { await viewModel.loadSessions() }
+                searchTask?.cancel()
+                searchTask = Task {
+                    try? await Task.sleep(for: .seconds(0.3))
+                    guard !Task.isCancelled else { return }
+                    await viewModel.loadSessions()
+                }
             }
             .refreshable {
                 await viewModel.loadSessions()
@@ -169,9 +175,11 @@ struct SessionListView: View {
             }
         } label: {
             HStack {
-                Image(systemName: collapsedGroups.contains(groupId) ? "chevron.right" : "chevron.down")
+                Image(systemName: "chevron.right")
                     .font(.caption2)
                     .frame(width: 12)
+                    .rotationEffect(.degrees(collapsedGroups.contains(groupId) ? 0 : 90))
+                    .animation(.easeInOut(duration: 0.2), value: collapsedGroups.contains(groupId))
                 Image(systemName: icon)
                     .font(.caption)
                     .foregroundStyle(iconColor)
@@ -191,13 +199,12 @@ struct SessionListView: View {
     // MARK: - Empty / Loading
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .tint(.accentBlue)
-            Text("Loading sessions...")
-                .foregroundStyle(.textSecondary)
+        List {
+            ForEach(0..<7, id: \.self) { _ in
+                SkeletonRow()
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .listStyle(.insetGrouped)
     }
 
     private var emptyView: some View {
@@ -237,12 +244,22 @@ struct SessionListView: View {
 struct SessionRow: View {
     let session: SessionSummary
     let timeAgo: String
+    @State private var isPulsing = false
 
     var body: some View {
         HStack(spacing: 12) {
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
+                .opacity(session.status == .running ? (isPulsing ? 0.3 : 1.0) : 1.0)
+                .shadow(color: session.status == .running ? .statusSuccess : .clear, radius: 4)
+                .onAppear {
+                    if session.status == .running {
+                        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                            isPulsing = true
+                        }
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -304,6 +321,71 @@ struct SessionRow: View {
         case .running: return .statusSuccess
         case .idle: return .statusWarning
         case .done: return .textSecondary
+        }
+    }
+}
+
+// MARK: - Skeleton Row
+
+struct SkeletonRow: View {
+    @State private var shimmerOffset: CGFloat = -200
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.bgTertiary)
+                .frame(width: 8, height: 8)
+
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.bgTertiary)
+                    .frame(width: 140, height: 14)
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.bgTertiary)
+                    .frame(height: 12)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.bgTertiary)
+                    .frame(width: 40, height: 10)
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.bgTertiary)
+                    .frame(width: 30, height: 10)
+            }
+        }
+        .padding(.vertical, 4)
+        .overlay(
+            LinearGradient(
+                colors: [.clear, .white.opacity(0.15), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .offset(x: shimmerOffset)
+            .mask(
+                HStack(spacing: 12) {
+                    Circle().frame(width: 8, height: 8)
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4).frame(width: 140, height: 14)
+                        RoundedRectangle(cornerRadius: 4).frame(height: 12)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4).frame(width: 40, height: 10)
+                        RoundedRectangle(cornerRadius: 4).frame(width: 30, height: 10)
+                    }
+                }
+                .padding(.vertical, 4)
+            )
+        )
+        .onAppear {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                shimmerOffset = 400
+            }
         }
     }
 }

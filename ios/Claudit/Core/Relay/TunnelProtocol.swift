@@ -60,6 +60,7 @@ final class TunnelProtocol {
 
     // PTY ready/exit signaling
     private var readyContinuation: CheckedContinuation<Bool, Never>?
+    private let readyLock = NSLock()
     private var ptyExited = false
 
     init(crypto: Crypto) {
@@ -72,9 +73,11 @@ final class TunnelProtocol {
     /// Must be called before sendTerminalControl(resume).
     func prepareForReady() {
         ptyExited = false
-        // Cancel any existing waiter
-        readyContinuation?.resume(returning: false)
+        readyLock.lock()
+        let cont = readyContinuation
         readyContinuation = nil
+        readyLock.unlock()
+        cont?.resume(returning: false)
     }
 
     /// Wait for PTY ready signal. Returns true if ready, false if exited or timed out.
@@ -83,13 +86,16 @@ final class TunnelProtocol {
         if ptyExited { return false }
 
         return await withCheckedContinuation { cont in
+            readyLock.lock()
             readyContinuation = cont
+            readyLock.unlock()
             Task {
                 try? await Task.sleep(for: .seconds(timeout))
-                if let c = readyContinuation {
-                    readyContinuation = nil
-                    c.resume(returning: false) // Timeout
-                }
+                self.readyLock.lock()
+                let c = self.readyContinuation
+                self.readyContinuation = nil
+                self.readyLock.unlock()
+                c?.resume(returning: false) // Timeout
             }
         }
     }
@@ -97,16 +103,22 @@ final class TunnelProtocol {
     /// Signal PTY is ready.
     func signalReady() {
         print("[Tunnel] PTY ready signal received")
-        readyContinuation?.resume(returning: true)
+        readyLock.lock()
+        let cont = readyContinuation
         readyContinuation = nil
+        readyLock.unlock()
+        cont?.resume(returning: true)
     }
 
     /// Signal PTY exited.
     func signalExit(code: Int) {
         print("[Tunnel] PTY exit signal received (code \(code))")
         ptyExited = true
-        readyContinuation?.resume(returning: false)
+        readyLock.lock()
+        let cont = readyContinuation
         readyContinuation = nil
+        readyLock.unlock()
+        cont?.resume(returning: false)
     }
 
     // MARK: - Outgoing

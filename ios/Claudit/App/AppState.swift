@@ -25,7 +25,7 @@ enum ConnectionStatus: String {
     }
 }
 
-@Observable
+@Observable @MainActor
 final class AppState {
     var connectionStatus: ConnectionStatus = .disconnected
     var isPaired: Bool = false
@@ -104,9 +104,7 @@ final class AppState {
             pairingId: pairingId,
             tunnel: tunnelInstance,
             onStatusChange: { [weak self] status in
-                Task { @MainActor in
-                    self?.connectionStatus = status
-                }
+                self?.connectionStatus = status
             }
         )
 

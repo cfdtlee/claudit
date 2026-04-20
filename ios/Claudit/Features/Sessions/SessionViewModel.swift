@@ -140,11 +140,15 @@ final class SessionViewModel {
         return path
     }
 
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     /// Time-ago string from timestamp.
     func timeAgo(from timestamp: Double) -> String {
         let date = Date(timeIntervalSince1970: timestamp / 1000)
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
