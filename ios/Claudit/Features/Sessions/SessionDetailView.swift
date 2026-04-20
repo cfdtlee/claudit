@@ -2,8 +2,9 @@ import SwiftUI
 
 struct SessionDetailView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = SessionViewModel()
-    @State private var showTerminal = false
+    @State private var isTerminalMode = false
     @State private var messageText = ""
     @State private var keyboardVisible = false
     @State private var isSending = false
@@ -11,6 +12,7 @@ struct SessionDetailView: View {
     @State private var reloadWorkItem: DispatchWorkItem?
     @State private var pendingUserMessage: String?
     @State private var chatResumed = false
+    @State private var sessionLocked = false
 
     let projectHash: String
     let sessionId: String
@@ -23,58 +25,60 @@ struct SessionDetailView: View {
     private let bottomAnchorId = "__bottom__"
 
     var body: some View {
-        Group {
-            if viewModel.isLoadingDetail {
-                ProgressView("Loading conversation...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let detail = viewModel.selectedDetail {
-                conversationView(detail)
-            } else if let error = viewModel.errorMessage {
-                errorView(error)
-            } else {
-                ProgressView("Connecting...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear {
-                        viewModel.setClient(appState.apiClient)
-                        loadConversation()
-                    }
+        ZStack {
+            // Chat layer
+            Group {
+                if viewModel.isLoadingDetail {
+                    ProgressView("Loading conversation...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let detail = viewModel.selectedDetail {
+                    conversationView(detail)
+                } else if let error = viewModel.errorMessage {
+                    errorView(error)
+                } else {
+                    ProgressView("Connecting...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onAppear {
+                            viewModel.setClient(appState.apiClient)
+                            loadConversation()
+                        }
+                }
             }
+            .opacity(isTerminalMode ? 0 : 1)
+
+            // Terminal layer (always in memory)
+            TerminalView(sessionId: sessionId, projectPath: viewModel.selectedDetail?.projectPath ?? "")
+                .environment(appState)
+                .opacity(isTerminalMode ? 1 : 0)
         }
         .background(Color.bgPrimary)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text(slug ?? String(sessionId.prefix(8)))
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.textPrimary)
-                    if let count = slugPartCount, count > 1 {
-                        Text("\(count) sessions merged")
-                            .font(.caption2)
-                            .foregroundStyle(.textSecondary)
-                    }
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showTerminal.toggle() } label: {
-                    Image(systemName: "terminal")
-                }
-            }
-        }
-        .sheet(isPresented: $showTerminal) {
-            NavigationStack {
-                TerminalView(sessionId: sessionId, projectPath: viewModel.selectedDetail?.projectPath ?? "")
-                    .environment(appState)
-                    .navigationTitle("Terminal")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showTerminal = false }
+                LiquidGlassSwitch(isOn: Binding(
+                    get: { isTerminalMode },
+                    set: { newValue in
+                        if newValue && sessionLocked {
+                            sendStatus = "Session in use by another process"
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { sendStatus = nil }
+                        } else {
+                            isTerminalMode = newValue
                         }
                     }
+                ))
             }
         }
         .toolbar(.hidden, for: .tabBar)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
         .onAppear {
             viewModel.setClient(appState.apiClient)
             loadConversation()
@@ -270,6 +274,13 @@ struct SessionDetailView: View {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let tunnel = appState.tunnel else { return }
 
+        // Check if session is locked
+        if sessionLocked {
+            sendStatus = "Session in use by another process"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { sendStatus = nil }
+            return
+        }
+
         pendingUserMessage = text
         isSending = true
         sendStatus = nil
@@ -287,7 +298,8 @@ struct SessionDetailView: View {
 
                     let ready = await tunnel.waitForReady(timeout: 15)
                     if !ready {
-                        sendStatus = "Session not available"
+                        sendStatus = "Session in use by another process"
+                        sessionLocked = true
                         isSending = false
                         pendingUserMessage = nil
                         chatResumed = false
@@ -347,9 +359,13 @@ struct SessionDetailView: View {
     // MARK: - Terminal Data Listener
 
     private func setupTerminalDataListener() {
-        // Terminal data listener only refreshes conversation (for terminal→chat sync)
-        // Does NOT clear isSending — that's handled by JSONL watcher's onSessionChanged
-        appState.tunnel?.onTerminalDataSecondary = { _ in
+        appState.tunnel?.onTerminalDataSecondary = { data in
+            // Detect session lock from terminal output
+            if let text = String(data: data, encoding: .utf8),
+               text.contains("No conversation found") || text.contains("session is in use") {
+                sessionLocked = true
+            }
+
             reloadWorkItem?.cancel()
             let item = DispatchWorkItem {
                 loadConversation()
@@ -369,6 +385,133 @@ struct SessionDetailView: View {
                 await viewModel.loadSessionDetail(projectHash: projectHash, sessionId: sessionId)
             }
         }
+    }
+}
+
+// MARK: - Liquid Glass Switch
+
+struct LiquidGlassSwitch: View {
+    @Binding var isOn: Bool
+    @State private var dragX: CGFloat = 0
+    @State private var isDragging = false
+
+    private let trackWidth: CGFloat = 75
+    private let trackHeight: CGFloat = 30
+    private let thumbRest: CGFloat = 26
+    private let thumbDrag: CGFloat = 32
+
+    // Thumb resting positions (center offsets)
+    private var leftX: CGFloat { -(trackWidth / 2 - thumbRest / 2 - 2) }
+    private var rightX: CGFloat { trackWidth / 2 - thumbRest / 2 - 2 }
+    private var restX: CGFloat { isOn ? rightX : leftX }
+
+    // Clamped thumb position during drag
+    private var thumbX: CGFloat {
+        if isDragging {
+            return min(max(restX + dragX, leftX), rightX)
+        }
+        return restX
+    }
+
+    private var thumbDiameter: CGFloat {
+        isDragging ? thumbDrag : thumbRest
+    }
+
+    // Determine which side the thumb is visually closer to
+    private var showingCLI: Bool {
+        if isDragging {
+            return thumbX > 0
+        }
+        return isOn
+    }
+
+    var body: some View {
+        ZStack {
+            // Track
+            Capsule()
+                .fill(Color.black.opacity(0.55))
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.18), .white.opacity(0.04)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.4), radius: 6, y: 3)
+
+            // Label — centered in the space opposite to the thumb
+            Text(showingCLI ? "CLI" : "Chat")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(width: trackWidth - thumbRest - 4, height: trackHeight)
+                .offset(x: showingCLI ? -(thumbRest / 2 + 2) : (thumbRest / 2 + 2))
+
+            // Thumb — glass circle
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [.white.opacity(0.3), .white.opacity(0.06)],
+                        center: .topLeading,
+                        startRadius: 0,
+                        endRadius: thumbDiameter
+                    )
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.45), .white.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                )
+                .shadow(color: .white.opacity(0.12), radius: isDragging ? 12 : 6)
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                .frame(width: thumbDiameter, height: thumbDiameter)
+                .overlay(
+                    // Icon inside thumb — matches current mode
+                    Group {
+                        if showingCLI {
+                            Image(systemName: "terminal.fill")
+                                .font(.system(size: 10, weight: .medium))
+                        } else {
+                            Image(systemName: "bubble.left.fill")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                    }
+                    .foregroundStyle(.white.opacity(0.9))
+                )
+                .offset(x: thumbX)
+                .animation(.spring(response: isDragging ? 0.1 : 0.4, dampingFraction: isDragging ? 1 : 0.65), value: thumbX)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: thumbDiameter)
+        }
+        .frame(width: trackWidth, height: max(trackHeight, thumbDrag + 4))
+        .contentShape(Capsule())
+        .onTapGesture {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                isOn.toggle()
+            }
+        }
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    isDragging = true
+                    dragX = value.translation.width
+                }
+                .onEnded { value in
+                    isDragging = false
+                    let finalX = restX + value.translation.width
+                    let switchThreshold: CGFloat = 0
+                    isOn = finalX > switchThreshold
+                    dragX = 0
+                }
+        )
     }
 }
 
