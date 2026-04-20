@@ -6,19 +6,13 @@ struct TaskListView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Status filter chips
-                statusFilterBar
-
-                // Task list
-                Group {
-                    if viewModel.isLoading && viewModel.tasks.isEmpty {
-                        loadingView
-                    } else if viewModel.filteredTasks.isEmpty {
-                        emptyView
-                    } else {
-                        taskList
-                    }
+            Group {
+                if viewModel.isLoading && viewModel.tasks.isEmpty {
+                    loadingView
+                } else if viewModel.filteredTasks.isEmpty {
+                    emptyView
+                } else {
+                    taskList
                 }
             }
             .navigationTitle("Tasks")
@@ -81,6 +75,11 @@ struct TaskListView: View {
 
     private var taskList: some View {
         List {
+            Section {
+                statusFilterBar
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
             ForEach(viewModel.filteredTasks) { task in
                 NavigationLink {
                     TaskDetailView(taskId: task.id)

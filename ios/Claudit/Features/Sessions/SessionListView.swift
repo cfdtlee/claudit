@@ -68,6 +68,7 @@ struct SessionListView: View {
                             NavigationLink {
                                 SessionDetailView(
                                     projectHash: item.group.projectHash,
+                                    projectPath: item.group.projectPath,
                                     sessionId: item.session.sessionId,
                                     slug: item.session.slug,
                                     slugPartCount: item.session.slugPartCount
@@ -99,6 +100,7 @@ struct SessionListView: View {
                             NavigationLink {
                                 SessionDetailView(
                                     projectHash: group.projectHash,
+                                    projectPath: group.projectPath,
                                     sessionId: session.sessionId,
                                     slug: session.slug,
                                     slugPartCount: session.slugPartCount

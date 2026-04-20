@@ -4,7 +4,8 @@ struct SessionDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = SessionViewModel()
-    @State private var isTerminalMode = false
+    @State private var isTerminalMode = true  // Default to CLI mode
+    @AppStorage("terminalFontSize") private var terminalFontSize: Double = 12
     @State private var messageText = ""
     @State private var keyboardVisible = false
     @State private var isSending = false
@@ -17,6 +18,7 @@ struct SessionDetailView: View {
     @State private var streamingText = ""
 
     let projectHash: String
+    let projectPath: String
     let sessionId: String
     let slug: String?
     let slugPartCount: Int?
@@ -49,13 +51,27 @@ struct SessionDetailView: View {
             .opacity(isTerminalMode ? 0 : 1)
 
             // Terminal layer (always in memory)
-            TerminalView(sessionId: sessionId, projectPath: viewModel.selectedDetail?.projectPath ?? "", isActive: isTerminalMode)
+            TerminalView(sessionId: sessionId, projectPath: projectPath, isActive: isTerminalMode, fontSize: $terminalFontSize)
                 .environment(appState)
                 .opacity(isTerminalMode ? 1 : 0)
         }
         .background(Color.bgPrimary)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if isTerminalMode {
+                    Button {
+                        // Cycle: 12 → 14 → 16 → 18 → 12
+                        let sizes: [Double] = [12, 14, 16, 18]
+                        let idx = sizes.firstIndex(of: terminalFontSize) ?? 0
+                        terminalFontSize = sizes[(idx + 1) % sizes.count]
+                    } label: {
+                        Text("Aa")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
             ToolbarItem(placement: .principal) {
                 LiquidGlassSwitch(isOn: Binding(
                     get: { isTerminalMode },

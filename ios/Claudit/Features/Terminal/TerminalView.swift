@@ -6,16 +6,17 @@ struct TerminalView: View {
     @Environment(AppState.self) private var appState
     let sessionId: String
     let projectPath: String
-    var isActive: Bool = true  // Only resume PTY when active
+    var isActive: Bool = true
+    @Binding var fontSize: Double
 
     var body: some View {
         SwiftTermWrapper(
             tunnel: appState.tunnel,
             sessionId: sessionId,
             projectPath: projectPath,
-            isActive: isActive
+            isActive: isActive,
+            fontSize: fontSize
         )
-        // Don't ignore keyboard safe area — let SwiftUI push terminal up when keyboard appears
         .background(Color.black)
     }
 }
@@ -26,6 +27,7 @@ struct SwiftTermWrapper: UIViewRepresentable {
     let sessionId: String
     let projectPath: String
     var isActive: Bool = true
+    var fontSize: Double
 
     func makeCoordinator() -> Coordinator {
         Coordinator(tunnel: tunnel, sessionId: sessionId, projectPath: projectPath)
@@ -36,8 +38,10 @@ struct SwiftTermWrapper: UIViewRepresentable {
         tv.backgroundColor = .black
         tv.nativeForegroundColor = .init(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
         tv.nativeBackgroundColor = .black
+        tv.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         tv.terminalDelegate = context.coordinator
         context.coordinator.terminalView = tv
+        context.coordinator.currentFontSize = fontSize
 
         // Feed terminal data from relay
         tunnel?.onTerminalData = { [weak tv] data in
@@ -52,11 +56,16 @@ struct SwiftTermWrapper: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {
-        // Only resume when active (user switched to CLI mode) and layout is ready
+        // Handle font size change — SwiftTerm recalculates cols/rows, sizeChanged fires resize
+        if fontSize != context.coordinator.currentFontSize {
+            context.coordinator.currentFontSize = fontSize
+            uiView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        }
+
+        // Only resume when active and layout is ready
         if isActive && !context.coordinator.hasResumed && uiView.frame.width > 0 {
             context.coordinator.hasResumed = true
 
-            // Get cols/rows from SwiftTerm's actual terminal dimensions
             let cols = uiView.getTerminal().cols
             let rows = uiView.getTerminal().rows
             print("[Terminal] Resuming with \(cols)x\(rows) (frame: \(uiView.frame.size))")
@@ -67,8 +76,6 @@ struct SwiftTermWrapper: UIViewRepresentable {
         }
 
         if !isActive && context.coordinator.hasResumed {
-            // PTY will be cleaned up by idle timer on server
-            // Reset so next activation re-resumes
             context.coordinator.hasResumed = false
         }
     }
@@ -79,6 +86,7 @@ struct SwiftTermWrapper: UIViewRepresentable {
         let sessionId: String
         let projectPath: String
         var hasResumed = false
+        var currentFontSize: Double = 12
 
         init(tunnel: TunnelProtocol?, sessionId: String, projectPath: String) {
             self.tunnel = tunnel
@@ -94,7 +102,6 @@ struct SwiftTermWrapper: UIViewRepresentable {
         func scrolled(source: SwiftTerm.TerminalView, position: Double) {}
         func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
         func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
-            // Only send resize after initial resume
             guard hasResumed else { return }
             let resize = "{\"type\":\"resize\",\"cols\":\(newCols),\"rows\":\(newRows)}"
             try? tunnel?.sendTerminalControl(resize)
