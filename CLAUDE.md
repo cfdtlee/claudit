@@ -5,7 +5,7 @@
 Before telling the user any iOS code change is complete, you MUST:
 
 1. Verify the file compiles — at minimum check for structural errors (mismatched braces, missing types)
-2. Run `cd /Users/shuangli/Documents/claude-manager/ios && xcodegen generate` if new files were added
+2. Run `cd ios && xcodegen generate` if new files were added
 3. Run `npm run build --prefix server` if server TypeScript was changed
 4. Never guess Swift API signatures — always verify from the dependency source code first
 5. Check for duplicate braces, missing closing braces, and code accidentally placed outside the struct

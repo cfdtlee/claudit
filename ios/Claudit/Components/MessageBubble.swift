@@ -50,7 +50,6 @@ struct MessageBubble: View {
                     }
                 }.joined(separator: "\n")
                 UIPasteboard.general.string = allText
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }

@@ -139,7 +139,7 @@ struct MarkdownRenderer: View {
                     Spacer()
                     Button {
                         UIPasteboard.general.string = code
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        // copied
                         copiedCodeIndex = index
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             if copiedCodeIndex == index {

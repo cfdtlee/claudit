@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { execSync, spawn } from 'child_process';
+import { execSync, execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -52,13 +52,13 @@ router.post('/new', async (req, res) => {
       }
       const worktreePath = path.join(path.dirname(projectPath), `${path.basename(projectPath)}-${worktree.branchName}`);
       try {
-        execSync(`git worktree add ${JSON.stringify(worktreePath)} -b ${JSON.stringify(worktree.branchName)}`, {
+        execFileSync('git', ['worktree', 'add', worktreePath, '-b', worktree.branchName], {
           cwd: projectPath, encoding: 'utf-8', timeout: 15_000,
         });
       } catch {
         // Branch may already exist — try without -b
         try {
-          execSync(`git worktree add ${JSON.stringify(worktreePath)} ${JSON.stringify(worktree.branchName)}`, {
+          execFileSync('git', ['worktree', 'add', worktreePath, worktree.branchName], {
             cwd: projectPath, encoding: 'utf-8', timeout: 15_000,
           });
         } catch (e: any) {

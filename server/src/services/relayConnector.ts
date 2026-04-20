@@ -259,9 +259,7 @@ function decryptMessage(base64: string): any | null {
   if (!config) return null;
   const plaintext = decrypt(base64, config.secretKey);
   if (!plaintext) {
-    const raw = Buffer.from(base64, 'base64');
-    console.error(`[relay] Decryption failed. Input length: ${base64.length}, decoded: ${raw.length} bytes, first bytes: ${raw.subarray(0, 16).toString('hex')}`);
-    console.error(`[relay] Key hex: ${Buffer.from(config.secretKey).toString('hex').substring(0, 16)}...`);
+    console.error('[relay] Decryption failed');
     return null;
   }
   try { return JSON.parse(plaintext); }

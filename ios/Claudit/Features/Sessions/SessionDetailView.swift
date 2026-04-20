@@ -48,7 +48,7 @@ struct SessionDetailView: View {
             .opacity(isTerminalMode ? 0 : 1)
 
             // Terminal layer (always in memory)
-            TerminalView(sessionId: sessionId, projectPath: viewModel.selectedDetail?.projectPath ?? "")
+            TerminalView(sessionId: sessionId, projectPath: viewModel.selectedDetail?.projectPath ?? "", isActive: isTerminalMode)
                 .environment(appState)
                 .opacity(isTerminalMode ? 1 : 0)
         }
@@ -133,13 +133,22 @@ struct SessionDetailView: View {
                                 .id(typingIndicatorId)
                         }
 
-                        // Invisible anchor at the very bottom
+                        // Invisible anchor + scroll offset tracker
                         Color.clear.frame(height: 1).id(bottomAnchorId)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: ScrollOffsetKey.self,
+                                        value: geo.frame(in: .named("chatScroll")).minY
+                                    )
+                                }
+                            )
                     }
                     .padding()
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: detail.recentMessages.count)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .coordinateSpace(name: "chatScroll")
                 .onAppear {
                     // Delay to let LazyVStack finish layout before scrolling
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -182,12 +191,12 @@ struct SessionDetailView: View {
                         .transition(.opacity.combined(with: .scale))
                     }
                 }
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    let distanceFromBottom = geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
-                    return distanceFromBottom > 200
-                } action: { _, isScrolledUp in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showScrollToBottom = isScrolledUp
+                .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                    let isScrolledUp = offset < -200
+                    if isScrolledUp != showScrollToBottom {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showScrollToBottom = isScrolledUp
+                        }
                     }
                 }
             }
@@ -204,17 +213,17 @@ struct SessionDetailView: View {
                     .background(Color.bgSecondary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                if isSending {
-                    ProgressView()
-                        .frame(width: 28, height: 28)
-                } else {
-                    Button { sendMessage() } label: {
+                Button { sendMessage() } label: {
+                    if isSending {
+                        ProgressView()
+                            .frame(width: 28, height: 28)
+                    } else {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
                             .foregroundStyle(messageText.isEmpty ? .textSecondary : .accentBlue)
                     }
-                    .disabled(messageText.isEmpty)
                 }
+                .disabled(messageText.isEmpty)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -310,44 +319,48 @@ struct SessionDetailView: View {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let tunnel = appState.tunnel else { return }
 
-        // Check if session is locked
-        if sessionLocked {
-            sendStatus = "Session in use by another process"
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { sendStatus = nil }
-            return
-        }
+        print("[Chat] Sending: \(text.prefix(50))")
 
+        // Reset any stale state
         pendingUserMessage = text
         isSending = true
         sendStatus = nil
+        sessionLocked = false
         messageText = ""
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        // Always re-resume PTY (previous one might have exited)
+        chatResumed = false
 
         Task {
             do {
-                // Resume PTY if not yet active
-                if !chatResumed {
-                    chatResumed = true
-                    tunnel.prepareForReady()
-                    let projectPath = viewModel.selectedDetail?.projectPath ?? ""
-                    let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
-                    try tunnel.sendTerminalControl(resume)
+                tunnel.prepareForReady()
+                let projectPath = viewModel.selectedDetail?.projectPath ?? ""
+                let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
+                try tunnel.sendTerminalControl(resume)
+                print("[Chat] Resume sent, waiting for ready...")
 
-                    let ready = await tunnel.waitForReady(timeout: 15)
-                    if !ready {
-                        sendStatus = "Session in use by another process"
-                        sessionLocked = true
-                        isSending = false
-                        pendingUserMessage = nil
-                        chatResumed = false
-                        return
-                    }
+                let ready = await tunnel.waitForReady(timeout: 15)
+                if !ready {
+                    print("[Chat] PTY not ready, session may be locked")
+                    sendStatus = "Session not available"
+                    isSending = false
+                    pendingUserMessage = nil
+                    return
                 }
 
-                // Send message via PTY terminal-input
+                print("[Chat] PTY ready, sending input")
                 try tunnel.sendTerminalInput(text + "\r")
-                // JSONL watcher will detect the response and trigger reload
+
+                // Timeout: if no response in 60s, clear sending state
+                try? await Task.sleep(for: .seconds(60))
+                if isSending {
+                    print("[Chat] Timeout waiting for response")
+                    isSending = false
+                    sendStatus = nil
+                    pendingUserMessage = nil
+                }
             } catch {
+                print("[Chat] Error: \(error)")
                 sendStatus = "Error: \(error.localizedDescription)"
                 isSending = false
                 pendingUserMessage = nil
@@ -376,15 +389,20 @@ struct SessionDetailView: View {
                     await viewModel.loadSessionDetail(projectHash: ph, sessionId: sid)
                 }
 
-                // Only clear pending UI when the LAST message is an assistant response
-                // (not when Claude writes the user message echo to JSONL)
+                // Clear pending user bubble as soon as the message appears in loaded data
+                // (prevents duplicate: pending bubble + loaded message)
+                if let pending = pendingUserMessage,
+                   let msgs = viewModel.selectedDetail?.messages,
+                   msgs.contains(where: { $0.role == .user && $0.content.contains(where: { $0.text?.contains(pending) == true }) }) {
+                    pendingUserMessage = nil
+                }
+
+                // Clear sending state when assistant has responded
                 if isSending,
                    let lastMsg = viewModel.selectedDetail?.messages.last,
                    lastMsg.role == .assistant {
                     isSending = false
                     sendStatus = nil
-                    pendingUserMessage = nil
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
             }
         }
@@ -398,10 +416,16 @@ struct SessionDetailView: View {
 
     private func setupTerminalDataListener() {
         appState.tunnel?.onTerminalDataSecondary = { data in
-            // Detect session lock from terminal output
-            if let text = String(data: data, encoding: .utf8),
-               text.contains("No conversation found") || text.contains("session is in use") {
-                sessionLocked = true
+            if let text = String(data: data, encoding: .utf8) {
+                // Detect session lock
+                if text.contains("No conversation found") || text.contains("session is in use") {
+                    sessionLocked = true
+                    chatResumed = false
+                }
+                // Detect PTY exit — need to re-resume next time
+                if text.contains("\"type\":\"exit\"") {
+                    chatResumed = false
+                }
             }
 
             reloadWorkItem?.cancel()
@@ -554,6 +578,15 @@ struct LiquidGlassSwitch: View {
 }
 
 // MARK: - Typing Dots Animation
+
+// MARK: - Scroll Offset Tracking (iOS 17 compatible)
+
+struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
 
 struct TypingDots: View {
     @State private var phase = 0

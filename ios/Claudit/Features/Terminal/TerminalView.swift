@@ -6,12 +6,14 @@ struct TerminalView: View {
     @Environment(AppState.self) private var appState
     let sessionId: String
     let projectPath: String
+    var isActive: Bool = true  // Only resume PTY when active
 
     var body: some View {
         SwiftTermWrapper(
             tunnel: appState.tunnel,
             sessionId: sessionId,
-            projectPath: projectPath
+            projectPath: projectPath,
+            isActive: isActive
         )
         // Don't ignore keyboard safe area — let SwiftUI push terminal up when keyboard appears
         .background(Color.black)
@@ -23,6 +25,7 @@ struct SwiftTermWrapper: UIViewRepresentable {
     let tunnel: TunnelProtocol?
     let sessionId: String
     let projectPath: String
+    var isActive: Bool = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(tunnel: tunnel, sessionId: sessionId, projectPath: projectPath)
@@ -49,8 +52,8 @@ struct SwiftTermWrapper: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {
-        // After layout, SwiftTerm knows its real size. Resume once.
-        if !context.coordinator.hasResumed && uiView.frame.width > 0 {
+        // Only resume when active (user switched to CLI mode) and layout is ready
+        if isActive && !context.coordinator.hasResumed && uiView.frame.width > 0 {
             context.coordinator.hasResumed = true
 
             // Get cols/rows from SwiftTerm's actual terminal dimensions

@@ -23,6 +23,14 @@ Thumbs.db
 
 # Build artifacts
 *.tgz
+relay/dist/
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+.swiftpm/xcode/xcuserdata/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+DerivedData/
 
 # Database
 *.db
