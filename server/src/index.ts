@@ -15,6 +15,7 @@ import groupRoutes from './routes/groups.js';
 import relayRoutes from './routes/relay.js';
 import analyticsRoutes from './routes/analytics.js';
 import { ClaudeProcess } from './services/claudeProcess.js';
+import { startSession as startChatSession, sendMessage as sendChatMessage, stopSession as stopChatSession, stopAllChatSessions } from './services/agentChat.js';
 import { initScheduler, stopAllJobs } from './services/cronScheduler.js';
 let handleTerminalConnection: ((ws: import('ws').WebSocket) => void) | null = null;
 try {
@@ -146,13 +147,26 @@ wssEvents.on('connection', (ws: WebSocket) => {
 
 wss.on('connection', (ws: WebSocket) => {
   console.log('[ws] Client connected');
-  let claude: ClaudeProcess | null = null;
+  let activeSessionId: string | null = null;
   let messageStartTime: number | null = null;
+
+  // Tracking state for delta computation from SDK streaming events
+  let lastTextLength = 0;
+  let lastThinkingLength = 0;
+  let lastMessageId = '';
+  const sentToolUseIds = new Set<string>();
 
   const safeSend = (data: object) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(data));
     }
+  };
+
+  const resetTracking = () => {
+    lastTextLength = 0;
+    lastThinkingLength = 0;
+    lastMessageId = '';
+    sentToolUseIds.clear();
   };
 
   ws.on('message', (raw: Buffer) => {
@@ -168,68 +182,132 @@ wss.on('connection', (ws: WebSocket) => {
 
     switch (msg.type) {
       case 'resume': {
-        if (claude) claude.stop();
+        // Stop previous session if any
+        if (activeSessionId) {
+          stopChatSession(activeSessionId);
+        }
 
-        claude = new ClaudeProcess(msg.sessionId, msg.projectPath);
+        activeSessionId = msg.sessionId;
+        resetTracking();
         track('ws_chat_resume', { session_hash: hashId(msg.sessionId || '') });
 
-        claude.on('ready', () => {
-          console.log('[ws] Claude CLI ready');
+        startChatSession(msg.sessionId, msg.projectPath, (_sessionId, event) => {
+          // Map SDK events to the WebSocket protocol the iOS client expects
+          switch (event.type) {
+            case 'system': {
+              if ((event as any).subtype === 'init') {
+                console.log('[ws] Claude SDK init received');
+              }
+              break;
+            }
+
+            case 'stream_event': {
+              // SDKPartialAssistantMessage — streaming deltas
+              const streamEvent = (event as any).event;
+              if (!streamEvent) break;
+
+              // Handle content_block_delta for text streaming
+              if (streamEvent.type === 'content_block_delta') {
+                const delta = streamEvent.delta;
+                if (delta?.type === 'text_delta' && delta.text) {
+                  safeSend({ type: 'assistant_text', text: delta.text });
+                } else if (delta?.type === 'thinking_delta' && delta.thinking) {
+                  safeSend({ type: 'assistant_thinking', text: delta.thinking });
+                }
+              }
+              break;
+            }
+
+            case 'assistant': {
+              // SDKAssistantMessage — full message snapshot
+              const betaMsg = (event as any).message;
+              if (!betaMsg?.content) break;
+
+              const messageId = betaMsg.id || '';
+              if (messageId !== lastMessageId) {
+                lastMessageId = messageId;
+                lastTextLength = 0;
+                lastThinkingLength = 0;
+              }
+
+              let fullText = '';
+              let fullThinking = '';
+
+              for (const block of betaMsg.content) {
+                if (block.type === 'text' && block.text) {
+                  fullText += block.text;
+                } else if (block.type === 'thinking' && block.thinking) {
+                  fullThinking += block.thinking;
+                } else if (block.type === 'tool_use' && !sentToolUseIds.has(block.id)) {
+                  sentToolUseIds.add(block.id);
+                  safeSend({
+                    type: 'tool_use',
+                    name: block.name,
+                    id: block.id,
+                    input: block.input || {},
+                  });
+                }
+              }
+
+              if (fullThinking.length > lastThinkingLength) {
+                const delta = fullThinking.slice(lastThinkingLength);
+                lastThinkingLength = fullThinking.length;
+                safeSend({ type: 'assistant_thinking', text: delta });
+              }
+
+              if (fullText.length > lastTextLength) {
+                const delta = fullText.slice(lastTextLength);
+                lastTextLength = fullText.length;
+                safeSend({ type: 'assistant_text', text: delta });
+              }
+              break;
+            }
+
+            case 'result': {
+              const durationMs = messageStartTime ? Date.now() - messageStartTime : null;
+              messageStartTime = null;
+              track('ws_chat_response', { duration_ms: durationMs });
+
+              // If result has text and we haven't sent any yet, send it
+              const resultText = (event as any).result;
+              if (resultText && typeof resultText === 'string' && lastTextLength === 0) {
+                safeSend({ type: 'assistant_text', text: resultText });
+              }
+
+              safeSend({ type: 'done' });
+              resetTracking();
+              break;
+            }
+
+            default:
+              break;
+          }
         });
 
-        claude.on('assistant_text', (text: string) => {
-          safeSend({ type: 'assistant_text', text });
-        });
-
-        claude.on('assistant_thinking', (text: string) => {
-          safeSend({ type: 'assistant_thinking', text });
-        });
-
-        claude.on('tool_use', (data: any) => {
-          safeSend({ type: 'tool_use', ...data });
-        });
-
-        claude.on('tool_result', (data: any) => {
-          safeSend({ type: 'tool_result', ...data });
-        });
-
-        claude.on('done', () => {
-          const durationMs = messageStartTime ? Date.now() - messageStartTime : null;
-          messageStartTime = null;
-          track('ws_chat_response', { duration_ms: durationMs });
-          safeSend({ type: 'done' });
-        });
-
-        claude.on('error', (message: string) => {
-          safeSend({ type: 'error', message });
-        });
-
-        claude.start();
-        // Send connected immediately — CLI waits for stdin so no init event until message sent
+        // Send connected immediately
         safeSend({ type: 'connected', sessionId: msg.sessionId });
         break;
       }
 
       case 'message': {
-        if (!claude) {
+        if (!activeSessionId) {
           safeSend({ type: 'error', message: 'No active session. Send "resume" first.' });
           return;
         }
         track('ws_chat_message', { char_count: (msg.content || '').length });
         messageStartTime = Date.now();
-        try {
-          claude.sendMessage(msg.content);
-        } catch (err: any) {
-          console.error(`[ws] sendMessage threw: ${err.message}`);
-          safeSend({ type: 'error', message: err.message });
+        resetTracking();
+        const sent = sendChatMessage(activeSessionId, msg.content);
+        if (!sent) {
+          safeSend({ type: 'error', message: 'Failed to send message — session may have ended.' });
         }
         break;
       }
 
       case 'stop': {
-        if (claude) {
-          claude.stop();
-          claude = null;
+        if (activeSessionId) {
+          stopChatSession(activeSessionId);
+          activeSessionId = null;
         }
         break;
       }
@@ -238,9 +316,9 @@ wss.on('connection', (ws: WebSocket) => {
 
   ws.on('close', (code: number, reason: Buffer) => {
     console.log(`[ws] Client disconnected code=${code} reason=${reason.toString()}`);
-    if (claude) {
-      claude.stop();
-      claude = null;
+    if (activeSessionId) {
+      stopChatSession(activeSessionId);
+      activeSessionId = null;
     }
   });
 
@@ -369,6 +447,7 @@ server.listen(PORT, () => {
     process.on(sig, () => {
       clearInterval(patrolTimer);
       stopRelay();
+      stopAllChatSessions();
       stopAllAgentSessions();
       stopWitness();
       stopMayor();

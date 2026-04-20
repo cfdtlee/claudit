@@ -14,6 +14,7 @@ struct SessionDetailView: View {
     @State private var chatResumed = false
     @State private var sessionLocked = false
     @State private var showScrollToBottom = false
+    @State private var streamingText = ""
 
     let projectHash: String
     let sessionId: String
@@ -85,14 +86,21 @@ struct SessionDetailView: View {
             loadConversation()
             setupTerminalDataListener()
             startWatchingSession()
-            // Pre-warm PTY so first message is instant
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                prewarmPTY()
+        }
+        .onChange(of: isTerminalMode) {
+            if isTerminalMode {
+                // Switching to CLI -- release chat SDK session
+                try? appState.tunnel?.sendChat("{\"type\":\"stop\"}")
+                chatResumed = false
+            } else {
+                // Switching to Chat -- reload conversation to pick up CLI changes
+                loadConversation()
             }
         }
         .onDisappear {
             appState.tunnel?.onTerminalDataSecondary = nil
             appState.tunnel?.onSessionChanged = nil
+            appState.tunnel?.onChatMessage = nil
             reloadWorkItem?.cancel()
             stopWatchingSession()
         }
@@ -131,10 +139,15 @@ struct SessionDetailView: View {
                                 .id(pendingMessageId)
                         }
 
-                        // Show typing indicator while waiting for response
+                        // Show typing indicator or streaming text while waiting for response
                         if isSending && pendingUserMessage != nil {
-                            typingIndicator
-                                .id(typingIndicatorId)
+                            if !streamingText.isEmpty {
+                                streamingResponseBubble
+                                    .id(typingIndicatorId)
+                            } else {
+                                typingIndicator
+                                    .id(typingIndicatorId)
+                            }
                         }
 
                         // Invisible anchor + scroll offset tracker
@@ -167,6 +180,9 @@ struct SessionDetailView: View {
                 .onChange(of: pendingUserMessage) {
                     scrollToBottom(proxy)
                     showScrollToBottom = false
+                }
+                .onChange(of: streamingText) {
+                    scrollToBottom(proxy)
                 }
                 .onChange(of: keyboardVisible) {
                     if keyboardVisible {
@@ -290,6 +306,31 @@ struct SessionDetailView: View {
         }
     }
 
+    // MARK: - Streaming Response Bubble
+
+    private var streamingResponseBubble: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                        .font(.caption2)
+                    Text("Assistant")
+                        .font(.caption2.weight(.medium))
+                    ProgressView()
+                        .scaleEffect(0.5)
+                }
+                .foregroundStyle(.textSecondary)
+
+                MarkdownRenderer(text: streamingText)
+            }
+            .padding(12)
+            .background(Color.bgSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Spacer(minLength: 20)
+        }
+    }
+
     // MARK: - Scroll
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
@@ -317,7 +358,7 @@ struct SessionDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Send (via PTY)
+    // MARK: - Send (via Chat channel)
 
     private func sendMessage() {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -327,70 +368,38 @@ struct SessionDetailView: View {
 
         pendingUserMessage = text
         isSending = true
+        streamingText = ""
         sendStatus = nil
         messageText = ""
 
-        Task {
-            do {
-                // Resume PTY only if not already active
-                if !chatResumed {
-                    chatResumed = true
-                    tunnel.prepareForReady()
-                    let projectPath = viewModel.selectedDetail?.projectPath ?? ""
-                    let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
-                    try tunnel.sendTerminalControl(resume)
-                    print("[Chat] Resume sent, waiting for ready...")
-
-                    let ready = await tunnel.waitForReady(timeout: 15)
-                    if !ready {
-                        print("[Chat] PTY not ready")
-                        sendStatus = "Session not available"
-                        isSending = false
-                        pendingUserMessage = nil
-                        chatResumed = false
-                        return
-                    }
-                    print("[Chat] PTY ready")
-                }
-
-                // Send message — PTY is alive
-                print("[Chat] Sending input")
-                try tunnel.sendTerminalInput(text + "\r")
-
-                // Timeout: if no response in 60s, clear sending state
-                try? await Task.sleep(for: .seconds(60))
-                if isSending {
-                    isSending = false
-                    sendStatus = nil
-                    pendingUserMessage = nil
-                }
-            } catch {
-                print("[Chat] Error: \(error)")
-                sendStatus = "Error"
-                isSending = false
-                pendingUserMessage = nil
-                chatResumed = false
+        // Resume chat session if not already active
+        if !chatResumed {
+            let projectPath = viewModel.selectedDetail?.projectPath ?? ""
+            let resumeDict: [String: Any] = [
+                "type": "resume",
+                "sessionId": sessionId,
+                "projectPath": projectPath
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: resumeDict),
+               let json = String(data: data, encoding: .utf8) {
+                try? tunnel.sendChat(json)
             }
-        }
-    }
+            // chatResumed will be set to true when "connected" response arrives
 
-    /// Pre-warm PTY when entering session detail (background, no UI impact)
-    private func prewarmPTY() {
-        guard let tunnel = appState.tunnel, !chatResumed else { return }
-        chatResumed = true
-        tunnel.prepareForReady()
-        let projectPath = viewModel.selectedDetail?.projectPath ?? ""
-        let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
-        try? tunnel.sendTerminalControl(resume)
-        print("[Chat] Pre-warming PTY")
-
-        Task {
-            let ready = await tunnel.waitForReady(timeout: 15)
-            if ready {
-                print("[Chat] PTY pre-warmed successfully")
-            } else {
-                chatResumed = false
-                print("[Chat] PTY pre-warm failed")
+            // Wait briefly for connection, then send
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let msgDict: [String: Any] = ["type": "message", "content": text]
+                if let data = try? JSONSerialization.data(withJSONObject: msgDict),
+                   let json = String(data: data, encoding: .utf8) {
+                    try? tunnel.sendChat(json)
+                }
+            }
+        } else {
+            // Already connected -- send directly
+            let msgDict: [String: Any] = ["type": "message", "content": text]
+            if let data = try? JSONSerialization.data(withJSONObject: msgDict),
+               let json = String(data: data, encoding: .utf8) {
+                try? tunnel.sendChat(json)
             }
         }
     }
@@ -404,6 +413,27 @@ struct SessionDetailView: View {
         let projectHash = self.projectHash
         let sessionId = self.sessionId
         try? tunnel.watchSession(projectHash: projectHash, sessionId: sessionId, start: true)
+
+        // Subscribe to streaming chat messages from the SDK
+        tunnel.onChatMessage = { json in
+            if let data = json.data(using: .utf8),
+               let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let type = msg["type"] as? String {
+                DispatchQueue.main.async {
+                    if type == "assistant_text", let text = msg["text"] as? String {
+                        streamingText += text
+                    } else if type == "done" {
+                        // Response complete -- reload to get formatted version
+                        loadConversation()
+                        isSending = false
+                        streamingText = ""
+                        pendingUserMessage = nil
+                    } else if type == "connected" {
+                        chatResumed = true
+                    }
+                }
+            }
+        }
 
         // When JSONL changes, reload conversation
         tunnel.onSessionChanged = { ph, sid in

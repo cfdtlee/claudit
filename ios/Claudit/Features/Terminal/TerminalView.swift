@@ -65,6 +65,12 @@ struct SwiftTermWrapper: UIViewRepresentable {
             let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":\(cols),\"rows\":\(rows)}"
             try? tunnel?.sendTerminalControl(resume)
         }
+
+        if !isActive && context.coordinator.hasResumed {
+            // PTY will be cleaned up by idle timer on server
+            // Reset so next activation re-resumes
+            context.coordinator.hasResumed = false
+        }
     }
 
     class Coordinator: NSObject, TerminalViewDelegate {
