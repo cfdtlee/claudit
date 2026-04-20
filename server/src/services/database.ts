@@ -442,6 +442,19 @@ TASK_FAILED: <reason why it could not be completed>
 For major milestones during work, output:
 CHECKPOINT: <what was just completed>`);
   },
+  // v8 → v9: analytics events table
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event TEXT NOT NULL,
+        props TEXT DEFAULT '{}',
+        timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_events_event ON events(event);
+      CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+    `);
+  },
 ];
 
 function runMigrations() {

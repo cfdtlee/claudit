@@ -11,6 +11,7 @@ import { MergedSessionDetail } from '../types.js';
 import { addManagedSession, renameManagedSession, archiveManagedSession, removeManagedSession, pinManagedSession } from '../services/managedSessions.js';
 import { eventBus } from '../services/eventBus.js';
 import { updateLastViewedMtime } from '../services/sessionIndexCache.js';
+import { track, hashId } from '../services/analytics.js';
 
 const router = Router();
 
@@ -165,6 +166,7 @@ router.post('/new', async (req, res) => {
     invalidateSessionCache();
 
     eventBus.emitSessionEvent({ type: 'session:created', sessionId });
+    track('session_create', { project_hash: hashId(projectHash) });
 
     res.json({ sessionId, projectPath: actualProjectPath, projectHash });
   } catch (err: any) {
@@ -455,6 +457,7 @@ router.delete('/:projectHash/:sessionId', (req, res) => {
     }
     removeManagedSession(sessionId);
     invalidateSessionCache();
+    track('session_delete', { session_hash: hashId(sessionId) });
     eventBus.emitSessionEvent({ type: 'session:deleted', sessionId });
     res.json({ ok: true });
   } catch (err: any) {

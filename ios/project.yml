@@ -6,6 +6,10 @@ options:
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
 
+configFiles:
+  Debug: Local.xcconfig
+  Release: Local.xcconfig
+
 settings:
   base:
     SWIFT_VERSION: "5.9"

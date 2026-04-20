@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { EventEmitter } from 'events';
+import { track, hashId } from './analytics.js';
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
@@ -16,7 +17,7 @@ export class JsonlWatcher extends EventEmitter {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
 
-  constructor(projectHash: string, sessionId: string, debounceMs = 300) {
+  constructor(projectHash: string, sessionId: string, debounceMs = 100) {
     super();
     this.filePath = path.join(PROJECTS_DIR, projectHash, `${sessionId}.jsonl`);
     this.debounceMs = debounceMs;
@@ -95,6 +96,7 @@ export class JsonlWatcher extends EventEmitter {
       }
 
       // Emit a generic change event (for Chat UI to trigger reload)
+      track('jsonl_change', { session_hash: hashId(path.basename(this.filePath, '.jsonl')) });
       this.emit('change');
     } catch (err: any) {
       // File might be temporarily locked during write

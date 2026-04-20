@@ -32,6 +32,7 @@
 		D95B4CE3C4EA3FA442802A74 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C002A35B0AFF7CBFD16B0F8 /* Preferences.swift */; };
 		DBB02C868E34B564E4F0C000 /* TunnelProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54974C4AD826CBE6F0CB6CC1 /* TunnelProtocol.swift */; };
 		DBB5A901D0BC4D837043C766 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9DF66F43C4E9E7B4A637DF /* Colors.swift */; };
+		DCB5A34A031966CB9AEA84AF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FCD3250F452257CA781568C9 /* Assets.xcassets */; };
 		E1D7A9A03D1E00D4656D87C1 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C32DAB454051EE661A7BC61F /* SessionListView.swift */; };
 		EDF643F57DB566F5A1F360F4 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62D44534654C4B68F71AB32 /* KeychainHelper.swift */; };
 		FDE1EB52146BAD548F0F06B8 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F2F2FFD671B3832C20F848 /* PairingView.swift */; };
@@ -63,9 +64,11 @@
 		E34B2F04F75190C32B0CC749 /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		E3545D7091C4B2D74A1AB3D1 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		E68ED6D20A4BDF4C6A289F59 /* ClauditApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClauditApp.swift; sourceTree = "<group>"; };
+		EE05071810E010E8C971F921 /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
 		F1F21923168279DEB5EBD943 /* PairingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingViewModel.swift; sourceTree = "<group>"; };
 		F3D7EA5F67E08072B819DFA9 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		F6235D4C591AEA619AB3F61A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FCD3250F452257CA781568C9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +84,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		100D67EDA35D99C7C9606BD0 /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				EE05071810E010E8C971F921 /* Local.xcconfig */,
+			);
+			name = ios;
+			path = .;
+			sourceTree = "<group>";
+		};
 		10D258B4FFBC03DFF2457CD6 /* Components */ = {
 			isa = PBXGroup;
 			children = (
@@ -154,6 +166,7 @@
 		662F117EDE3EAF0877FAE8E6 /* Claudit */ = {
 			isa = PBXGroup;
 			children = (
+				FCD3250F452257CA781568C9 /* Assets.xcassets */,
 				C8317A7B0F053201590A5B82 /* Info.plist */,
 				A1CE6C1605848D1A0AADBEEA /* App */,
 				10D258B4FFBC03DFF2457CD6 /* Components */,
@@ -205,6 +218,7 @@
 			isa = PBXGroup;
 			children = (
 				662F117EDE3EAF0877FAE8E6 /* Claudit */,
+				100D67EDA35D99C7C9606BD0 /* ios */,
 				F8C0B116399BEDB36678ADC5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -243,6 +257,7 @@
 			buildConfigurationList = 932B22F36A781F8DAB697900 /* Build configuration list for PBXNativeTarget "Claudit" */;
 			buildPhases = (
 				4103C4DF7B797D97B08C7F03 /* Sources */,
+				EEDBFB0C33905ECEE1D66069 /* Resources */,
 				402B51CACD31B1FDFC154795 /* Frameworks */,
 			);
 			buildRules = (
@@ -289,6 +304,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		EEDBFB0C33905ECEE1D66069 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DCB5A34A031966CB9AEA84AF /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		4103C4DF7B797D97B08C7F03 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -328,6 +354,7 @@
 /* Begin XCBuildConfiguration section */
 		01AD4B4837B456EC1A23A4B9 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EE05071810E010E8C971F921 /* Local.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -385,6 +412,7 @@
 		};
 		41A0BC3888EB68DBA11B5B01 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EE05071810E010E8C971F921 /* Local.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -453,7 +481,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = R6U9X4QR6C;
 				INFOPLIST_FILE = Claudit/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -472,7 +500,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = R6U9X4QR6C;
 				INFOPLIST_FILE = Claudit/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

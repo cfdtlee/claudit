@@ -31,6 +31,7 @@ xcuserdata/
 .swiftpm/xcode/xcuserdata/
 .swiftpm/xcode/package.xcworkspace/xcuserdata/
 DerivedData/
+ios/Local.xcconfig
 
 # Database
 *.db

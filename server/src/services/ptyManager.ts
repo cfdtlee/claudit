@@ -5,6 +5,7 @@ import os from 'os';
 import { WebSocket } from 'ws';
 import { eventBus } from './eventBus.js';
 import { CLAUDE_BIN } from './claudeProcess.js';
+import { track, hashId } from './analytics.js';
 
 // node-pty is optional — dynamically loaded
 let pty: typeof import('node-pty') | null = null;
@@ -215,6 +216,7 @@ function spawnPty(
 
   process.onExit(({ exitCode, signal }) => {
     console.log(`[pty] Process exited: key=${key} code=${exitCode} signal=${signal}`);
+    track('pty_exit', { exit_code: exitCode, session_hash: hashId(sessionId || key) });
     entry.exited = true;
     entry.exitCode = exitCode;
     activePtySessions.delete(sessionId);
@@ -239,6 +241,8 @@ function spawnPty(
   if (sessionId) {
     activePtySessions.add(sessionId);
   }
+
+  track('pty_spawn', { session_hash: hashId(sessionId || key) });
 
   ptyCache.set(key, entry);
   return entry;

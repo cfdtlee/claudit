@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import http from 'http';
 import { encrypt, decrypt } from './relayCrypto.js';
 import { getWatcher, stopWatcher } from './jsonlWatcher.js';
+import { track } from './analytics.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ function connect(): void {
       setState('connected');
       connectedSince = Date.now();
       reconnectAttempts = 0;
+      track('relay_connect');
       console.log('[relay] Both channels connected');
       startEventForwarding();
     }
@@ -219,6 +221,7 @@ function connect(): void {
 
 function handleDisconnect(): void {
   if (stopped) return;
+  track('relay_disconnect', { reason: 'connection_lost' });
   closeWs(controlWs, 'control');
   closeWs(ptyWs, 'pty');
   stopEventForwarding();
@@ -302,6 +305,7 @@ function handleApiRequest(msg: {
   }
 
   console.log(`[relay] API proxy: ${inner.method} ${inner.path}`);
+  const apiStartTime = Date.now();
 
   const port = getLocalPort();
   const options: http.RequestOptions = {
@@ -314,6 +318,7 @@ function handleApiRequest(msg: {
     res.on('data', (chunk: Buffer) => chunks.push(chunk));
     res.on('end', () => {
       const responseBody = Buffer.concat(chunks).toString('utf-8');
+      track('relay_api_proxy', { method: inner.method, path: inner.path, status: res.statusCode, duration_ms: Date.now() - apiStartTime });
       console.log(`[relay] API response: ${res.statusCode} (${responseBody.length} bytes)`);
       sendEncrypted(controlWs, {
         channel: 'api',

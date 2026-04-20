@@ -13,6 +13,7 @@ import settingsRoutes from './routes/settings.js';
 import dashboardRoutes from './routes/dashboard.js';
 import groupRoutes from './routes/groups.js';
 import relayRoutes from './routes/relay.js';
+import analyticsRoutes from './routes/analytics.js';
 import { ClaudeProcess } from './services/claudeProcess.js';
 import { initScheduler, stopAllJobs } from './services/cronScheduler.js';
 let handleTerminalConnection: ((ws: import('ws').WebSocket) => void) | null = null;
@@ -32,6 +33,7 @@ import { getSetting, getSettingsObject } from './services/settingsStorage.js';
 import { spawnAgentSession, killAgentSession, sendToAgent, stopAllAgentSessions } from './services/sessionManager.js';
 import { stopRelay } from './services/relayConnector.js';
 import { createMessage } from './services/messageStorage.js';
+import { track, hashId } from './services/analytics.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '7433', 10);
@@ -51,6 +53,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/relay', relayRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -144,6 +147,7 @@ wssEvents.on('connection', (ws: WebSocket) => {
 wss.on('connection', (ws: WebSocket) => {
   console.log('[ws] Client connected');
   let claude: ClaudeProcess | null = null;
+  let messageStartTime: number | null = null;
 
   const safeSend = (data: object) => {
     if (ws.readyState === WebSocket.OPEN) {
@@ -167,6 +171,7 @@ wss.on('connection', (ws: WebSocket) => {
         if (claude) claude.stop();
 
         claude = new ClaudeProcess(msg.sessionId, msg.projectPath);
+        track('ws_chat_resume', { session_hash: hashId(msg.sessionId || '') });
 
         claude.on('ready', () => {
           console.log('[ws] Claude CLI ready');
@@ -189,6 +194,9 @@ wss.on('connection', (ws: WebSocket) => {
         });
 
         claude.on('done', () => {
+          const durationMs = messageStartTime ? Date.now() - messageStartTime : null;
+          messageStartTime = null;
+          track('ws_chat_response', { duration_ms: durationMs });
           safeSend({ type: 'done' });
         });
 
@@ -207,6 +215,8 @@ wss.on('connection', (ws: WebSocket) => {
           safeSend({ type: 'error', message: 'No active session. Send "resume" first.' });
           return;
         }
+        track('ws_chat_message', { char_count: (msg.content || '').length });
+        messageStartTime = Date.now();
         try {
           claude.sendMessage(msg.content);
         } catch (err: any) {

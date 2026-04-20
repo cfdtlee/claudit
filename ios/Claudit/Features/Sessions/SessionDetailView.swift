@@ -85,6 +85,10 @@ struct SessionDetailView: View {
             loadConversation()
             setupTerminalDataListener()
             startWatchingSession()
+            // Pre-warm PTY so first message is instant
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                prewarmPTY()
+            }
         }
         .onDisappear {
             appState.tunnel?.onTerminalDataSecondary = nil
@@ -321,49 +325,72 @@ struct SessionDetailView: View {
 
         print("[Chat] Sending: \(text.prefix(50))")
 
-        // Reset any stale state
         pendingUserMessage = text
         isSending = true
         sendStatus = nil
-        sessionLocked = false
         messageText = ""
-
-        // Always re-resume PTY (previous one might have exited)
-        chatResumed = false
 
         Task {
             do {
-                tunnel.prepareForReady()
-                let projectPath = viewModel.selectedDetail?.projectPath ?? ""
-                let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
-                try tunnel.sendTerminalControl(resume)
-                print("[Chat] Resume sent, waiting for ready...")
+                // Resume PTY only if not already active
+                if !chatResumed {
+                    chatResumed = true
+                    tunnel.prepareForReady()
+                    let projectPath = viewModel.selectedDetail?.projectPath ?? ""
+                    let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
+                    try tunnel.sendTerminalControl(resume)
+                    print("[Chat] Resume sent, waiting for ready...")
 
-                let ready = await tunnel.waitForReady(timeout: 15)
-                if !ready {
-                    print("[Chat] PTY not ready, session may be locked")
-                    sendStatus = "Session not available"
-                    isSending = false
-                    pendingUserMessage = nil
-                    return
+                    let ready = await tunnel.waitForReady(timeout: 15)
+                    if !ready {
+                        print("[Chat] PTY not ready")
+                        sendStatus = "Session not available"
+                        isSending = false
+                        pendingUserMessage = nil
+                        chatResumed = false
+                        return
+                    }
+                    print("[Chat] PTY ready")
                 }
 
-                print("[Chat] PTY ready, sending input")
+                // Send message — PTY is alive
+                print("[Chat] Sending input")
                 try tunnel.sendTerminalInput(text + "\r")
 
                 // Timeout: if no response in 60s, clear sending state
                 try? await Task.sleep(for: .seconds(60))
                 if isSending {
-                    print("[Chat] Timeout waiting for response")
                     isSending = false
                     sendStatus = nil
                     pendingUserMessage = nil
                 }
             } catch {
                 print("[Chat] Error: \(error)")
-                sendStatus = "Error: \(error.localizedDescription)"
+                sendStatus = "Error"
                 isSending = false
                 pendingUserMessage = nil
+                chatResumed = false
+            }
+        }
+    }
+
+    /// Pre-warm PTY when entering session detail (background, no UI impact)
+    private func prewarmPTY() {
+        guard let tunnel = appState.tunnel, !chatResumed else { return }
+        chatResumed = true
+        tunnel.prepareForReady()
+        let projectPath = viewModel.selectedDetail?.projectPath ?? ""
+        let resume = "{\"type\":\"resume\",\"sessionId\":\"\(sessionId)\",\"projectPath\":\"\(projectPath)\",\"cols\":80,\"rows\":24}"
+        try? tunnel.sendTerminalControl(resume)
+        print("[Chat] Pre-warming PTY")
+
+        Task {
+            let ready = await tunnel.waitForReady(timeout: 15)
+            if ready {
+                print("[Chat] PTY pre-warmed successfully")
+            } else {
+                chatResumed = false
+                print("[Chat] PTY pre-warm failed")
             }
         }
     }
