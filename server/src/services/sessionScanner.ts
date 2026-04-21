@@ -185,6 +185,76 @@ export function getSlugFromSession(sessionFile: string): string | null {
   }
 }
 
+// Token usage cache
+let tokenCache: { total: number; computedAt: number } | null = null;
+const TOKEN_CACHE_TTL = 30_000; // 30s
+
+/** Sum token usage from all session JSONL files modified today */
+export function getTokenUsageFromSessions(): number {
+  const now = Date.now();
+  if (tokenCache && (now - tokenCache.computedAt) < TOKEN_CACHE_TTL) {
+    return tokenCache.total;
+  }
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayMs = todayStart.getTime();
+  const todayIso = todayStart.toISOString();
+
+  let totalTokens = 0;
+
+  if (!fs.existsSync(PROJECTS_DIR)) {
+    tokenCache = { total: 0, computedAt: now };
+    return 0;
+  }
+
+  const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+
+  for (const dir of projectDirs) {
+    if (!dir.isDirectory()) continue;
+    const projectDir = path.join(PROJECTS_DIR, dir.name);
+    const files = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
+
+    for (const file of files) {
+      const filePath = path.join(projectDir, file);
+      try {
+        const stat = fs.statSync(filePath);
+        if (stat.mtimeMs < todayMs) continue;
+
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const usageByMsgId = new Map<string, { input: number; output: number }>();
+
+        for (const line of content.split('\n')) {
+          if (!line.includes('"type":"assistant"')) continue;
+          try {
+            const record = JSON.parse(line);
+            if (record.type !== 'assistant') continue;
+            if (record.timestamp && record.timestamp < todayIso) continue;
+            const msg = record.message;
+            if (!msg?.id || !msg.usage) continue;
+            const usage = msg.usage;
+            usageByMsgId.set(msg.id, {
+              input: (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0),
+              output: usage.output_tokens || 0,
+            });
+          } catch {
+            // skip malformed
+          }
+        }
+
+        for (const u of usageByMsgId.values()) {
+          totalTokens += u.input + u.output;
+        }
+      } catch {
+        // skip inaccessible files
+      }
+    }
+  }
+
+  tokenCache = { total: totalTokens, computedAt: now };
+  return totalTokens;
+}
+
 /** Scan projects directory to find all session files, using mtime-based cache */
 export function scanProjectSessions(): SessionSummary[] {
   const summaries: SessionSummary[] = [];

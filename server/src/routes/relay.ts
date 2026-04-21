@@ -114,9 +114,11 @@ router.post('/start', (req, res) => {
   }
 });
 
-// POST /api/relay/stop
+// POST /api/relay/stop — Stop relay and delete saved credentials so next start
+// generates a fresh pairing (and QR).
 router.post('/stop', (_req, res) => {
   stopRelay();
+  deleteRelayConfig();
   res.json({ status: 'disconnected' });
 });
 
@@ -143,6 +145,7 @@ router.get('/qr', async (_req, res) => {
     const qrData = buildQrData(pairing.relayUrl, pairing.pairingId, pairing.secretKeyBase64);
     const svg = await QRCode.toString(qrData, { type: 'svg', margin: 2, width: 300 });
     res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.send(svg);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -158,6 +161,7 @@ router.get('/qr.png', async (_req, res) => {
     const qrData = buildQrData(pairing.relayUrl, pairing.pairingId, pairing.secretKeyBase64);
     const buffer = await QRCode.toBuffer(qrData, { type: 'png', margin: 2, width: 300 });
     res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.send(buffer);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -166,6 +170,7 @@ router.get('/qr.png', async (_req, res) => {
 
 // GET /api/relay/pair — Pairing page with QR code
 router.get('/pair', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   const pairing = getPairingInfo();
   if (!pairing) {
     return res.send(`

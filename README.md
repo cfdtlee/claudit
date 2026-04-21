@@ -32,11 +32,11 @@ claudit --help   # Show help and MCP setup info
 claudit -v       # Show version
 ```
 
-Open http://localhost:3001
+Open http://localhost:7433
 
 | Environment Variable | Description |
 |---|---|
-| `PORT` | Server port (default: 3001) |
+| `PORT` | Server port (default: 7433) |
 | `NODE_ENV` | Set to `development` for dev mode |
 
 ## Features

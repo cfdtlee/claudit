@@ -19,7 +19,7 @@ const server = new McpServer({
   version: '0.2.0',
 });
 
-const SERVER_PORT = parseInt(process.env.PORT || '3001', 10);
+const SERVER_PORT = parseInt(process.env.PORT || '7433', 10);
 
 /** Call main server's internal API synchronously */
 async function serverCall(endpoint: string, body: Record<string, unknown>): Promise<{ ok: boolean; data?: any; error?: string }> {
